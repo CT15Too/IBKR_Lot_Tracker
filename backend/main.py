@@ -274,7 +274,10 @@ def create_app(
             report = fetch_flex_report(token, query_id)
         except FlexServiceError as exc:
             logger.error("Flex Web Service call failed: %s", type(exc).__name__)
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
+            raise HTTPException(
+                status_code=502,
+                detail="IBKR Flex request failed; check credentials and try again.",
+            ) from exc
         try:
             parse_open_position_lots(report.raw_xml)
         except FlexParseError as exc:

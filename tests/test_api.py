@@ -8,9 +8,10 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from backend import main as main_module
-from backend.ibkr_flex import FlexReport
+from backend.ibkr_flex import FlexReport, FlexServiceError
 from backend.prices import PriceQuote
 from backend.runtime import LaunchMode, build_runtime
+import run as browser_entry
 
 FIXTURE_XML = (Path(__file__).parent / "fixtures" / "sample_flex.xml").read_text()
 
@@ -43,6 +44,33 @@ def test_status_before_any_refresh(tmp_path, monkeypatch):
     assert resp.status_code == 200
     assert resp.json()["configured"] is True
     assert resp.json()["last_fetched_at"] is None
+
+
+def test_refresh_failure_never_returns_credential_material(tmp_path, monkeypatch):
+    client = make_client(tmp_path, monkeypatch)
+
+    def fail_with_echoed_token(token, query_id):
+        raise FlexServiceError(f"upstream echoed {token}")
+
+    monkeypatch.setattr(main_module, "fetch_flex_report", fail_with_echoed_token)
+    response = client.post("/api/refresh-lots")
+
+    assert response.status_code == 502
+    assert "fake-token" not in response.text
+
+
+def test_browser_entrypoint_always_binds_to_loopback(monkeypatch):
+    called = {}
+    monkeypatch.setattr(browser_entry.settings, "app_host", "0.0.0.0")
+    monkeypatch.setattr(
+        browser_entry.uvicorn,
+        "run",
+        lambda app, **kwargs: called.update(kwargs),
+    )
+
+    browser_entry.main()
+
+    assert called["host"] == "127.0.0.1"
 
 
 def test_lots_404_before_refresh(tmp_path, monkeypatch):
