@@ -19,7 +19,24 @@ from backend.updater.service import UpdateService
 from backend.version import APP_VERSION, GITHUB_REPOSITORY, UPDATER_VERSION
 
 
-def _current_install_path(platform_name, executable):
+def _current_install_path(platform_name, executable, *, environ=None):
+    environment = os.environ if environ is None else environ
+    if platform_name == "linux":
+        raw_appimage = environment.get("APPIMAGE")
+        if not isinstance(raw_appimage, str) or not raw_appimage:
+            raise ValueError("APPIMAGE must identify the running AppImage")
+        try:
+            appimage = Path(raw_appimage)
+            if not appimage.is_absolute() or not appimage.is_file():
+                raise ValueError
+            resolved = appimage.resolve(strict=True)
+        except (OSError, ValueError):
+            raise ValueError(
+                "APPIMAGE must be an absolute path to the running AppImage"
+            ) from None
+        if not os.access(resolved, os.X_OK):
+            raise ValueError("APPIMAGE must identify an executable AppImage")
+        return resolved
     path = Path(executable).resolve()
     if platform_name == "macos":
         for parent in path.parents:

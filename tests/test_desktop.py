@@ -211,3 +211,31 @@ def test_entrypoint_smoke_mode_uses_packaged_runtime_without_webview(tmp_path):
     ) == 0
     assert captured["mode"] is LaunchMode.PACKAGED_DESKTOP
     assert captured["smoke"] == (fake_runtime, "updater")
+
+
+def test_linux_packaged_install_path_uses_absolute_appimage(tmp_path):
+    appimage = tmp_path / "IBKR Lot Tracker.AppImage"
+    appimage.write_bytes(b"appimage")
+    appimage.chmod(0o755)
+
+    assert desktop_entry._current_install_path(
+        "linux",
+        "/tmp/.mount_ibkr/usr/bin/python",
+        environ={"APPIMAGE": str(appimage)},
+    ) == appimage.resolve()
+
+
+@pytest.mark.parametrize(
+    "appimage",
+    [None, "relative.AppImage", "/definitely/missing/IBKR.AppImage", "\x00"],
+)
+def test_linux_packaged_install_path_rejects_missing_or_malformed_appimage(
+    appimage,
+):
+    environment = {} if appimage is None else {"APPIMAGE": appimage}
+    with pytest.raises(ValueError, match="APPIMAGE"):
+        desktop_entry._current_install_path(
+            "linux",
+            "/tmp/.mount_ibkr/usr/bin/python",
+            environ=environment,
+        )
