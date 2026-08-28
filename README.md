@@ -59,6 +59,46 @@ Open **http://127.0.0.1:8000** and click **Refresh from IBKR**.
 
 ---
 
+## Launch modes
+
+The project runs three ways, all sharing the same backend and frontend:
+
+| Mode | Command | Notes |
+|---|---|---|
+| Browser (source) | `python3 run.py` | Serve in a browser at `http://127.0.0.1:8000`. Reads config from `.env`. |
+| Desktop (source) | `python3 run_desktop.py` | Opens the app in a native pywebview window. |
+| Desktop (installed) | Launch the downloaded **IBKR Lot Tracker** package | Bundled by PyInstaller; reads settings from the OS data directory. |
+
+---
+
+## Desktop application
+
+Installed desktop builds keep writable data outside the application directory
+so reinstalling or upgrading never erases your data:
+
+- macOS: `~/Library/Application Support/IBKR Lot Tracker`
+- Windows: `%LOCALAPPDATA%\IBKR Lot Tracker`
+- Linux: `$XDG_DATA_HOME/ibkr-lot-tracker`
+
+On first launch with no credentials configured, the app opens **Settings** where
+you enter your IBKR Flex query ID and token. The query ID and preferences are
+stored in a settings file; the Flex token is stored in the operating system
+credential store and is never written to a log, a settings file, or a manifest.
+
+### Updates
+
+Installed apps check for new public releases at most once every 24 hours (or on
+demand via **Check for updates**). When a newer release is available the app
+shows its version and release notes, then waits for you to approve the
+download. After the download is verified you can **Restart and update** or
+**Defer** it. If you are **up to date**, the panel says so. Cancelling or
+failing an update leaves your current version untouched.
+
+Browser/source mode is updated through **Git** (`git pull`), so the in-app
+update controls are hidden or disabled.
+
+---
+
 ## IBKR setup (one time)
 
 You need two things from IBKR: a **Flex Query** and a **Flex Web Service token**.
@@ -153,7 +193,8 @@ All options go in `.env` (copy from `.env.example`):
 ## Running tests
 
 ```bash
-pytest
+python3 -m pip install -r requirements-dev.txt
+python3 -m pytest
 ```
 
 ---
