@@ -38,6 +38,7 @@ def test_empty_linux_xdg_data_home_uses_default(monkeypatch, tmp_path):
 
 def test_packaged_platform_data_paths(monkeypatch, tmp_path):
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "Local"))
+    monkeypatch.delenv("XDG_DATA_HOME", raising=False)
     mac = build_runtime(
         LaunchMode.PACKAGED_DESKTOP, platform_name="darwin", home=tmp_path
     )
