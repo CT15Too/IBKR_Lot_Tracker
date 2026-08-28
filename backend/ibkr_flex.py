@@ -117,3 +117,10 @@ def fetch_flex_report(token: str, query_id: str) -> FlexReport:
         f"Report never finished generating after {MAX_POLL_ATTEMPTS * POLL_INTERVAL_SECONDS}s. "
         "IBKR can be slow during market hours -- try again shortly."
     )
+
+
+def validate_flex_credentials(token: str, query_id: str) -> None:
+    """Validate credentials by starting report generation, without polling it."""
+    if not token or not query_id:
+        raise FlexServiceError("Flex token and query ID must both be set")
+    _send_request(token, query_id)

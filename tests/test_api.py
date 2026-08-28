@@ -7,18 +7,20 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from backend import db as db_module
 from backend import main as main_module
 from backend.ibkr_flex import FlexReport
 from backend.prices import PriceQuote
+from backend.runtime import LaunchMode, build_runtime
 
 FIXTURE_XML = (Path(__file__).parent / "fixtures" / "sample_flex.xml").read_text()
 
 
 def make_client(tmp_path, monkeypatch):
     # Isolate this test's SQLite file and pretend the app is configured.
-    test_db_path = str(tmp_path / "test_lots.db")
-    monkeypatch.setattr(main_module, "_conn", db_module.get_connection(test_db_path))
+    runtime = build_runtime(
+        LaunchMode.BROWSER,
+        browser_database_path=tmp_path / "test_lots.db",
+    )
     monkeypatch.setattr(main_module.settings, "ibkr_flex_token", "fake-token")
     monkeypatch.setattr(main_module.settings, "ibkr_flex_query_id", "12345")
     monkeypatch.setattr(main_module.settings, "flex_min_refresh_minutes", 15)
@@ -32,7 +34,7 @@ def make_client(tmp_path, monkeypatch):
             "TSLA": PriceQuote(symbol="TSLA", price=245.10, stale=False),
         },
     )
-    return TestClient(main_module.app)
+    return TestClient(main_module.create_app(runtime))
 
 
 def test_status_before_any_refresh(tmp_path, monkeypatch):

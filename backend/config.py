@@ -7,6 +7,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from .runtime import LaunchMode
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv(BASE_DIR / ".env")
 
@@ -26,3 +28,11 @@ class Settings:
 
 
 settings = Settings()
+
+
+def runtime_credentials(runtime, credential_store=None, settings_store=None):
+    """Return the active token/query pair without crossing unused boundaries."""
+    if runtime.mode is LaunchMode.BROWSER:
+        return settings.ibkr_flex_token, settings.ibkr_flex_query_id
+    desktop_settings = settings_store.load()
+    return credential_store.get_token(), desktop_settings.flex_query_id
