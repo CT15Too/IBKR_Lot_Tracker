@@ -80,6 +80,19 @@ class BlockingInstaller:
         return path.name
 
 
+class FailingSaveSettingsStore:
+    def __init__(self, settings):
+        self.settings = settings
+        self.save_calls = 0
+
+    def load(self):
+        return self.settings
+
+    def save(self, settings):
+        self.save_calls += 1
+        raise OSError("read-only settings")
+
+
 @pytest.fixture
 def update():
     return VerifiedUpdate(
@@ -208,6 +221,33 @@ def test_future_persisted_check_is_clamped_and_remains_recent(
     assert restarted.check(manual=False) is False
     clock.advance(hours=1)
     assert restarted.check(manual=False) is True
+
+
+def test_failed_future_timestamp_clamp_does_not_block_discovery(
+    tmp_path, update, clock
+):
+    store = FailingSaveSettingsStore(
+        DesktopSettings(
+            last_update_check_at=(clock() + timedelta(days=7)).isoformat()
+        )
+    )
+    discovery = FakeDiscovery(update)
+    service = UpdateService(
+        runtime=SimpleNamespace(
+            mode=LaunchMode.PACKAGED_DESKTOP, staging_dir=tmp_path / "updates"
+        ),
+        settings_store=store,
+        discovery=discovery,
+        downloader=FakeDownloader(),
+        clock=clock,
+    )
+
+    assert service.check(manual=False) is True
+    assert discovery.calls == 1
+    assert service.snapshot().last_checked_at == clock().isoformat()
+    assert service.snapshot().status == UpdateStatus.FAILED
+    assert service.check(manual=False) is False
+    assert discovery.calls == 1
 
 
 def test_failures_preserve_use_of_application_and_hide_paths(service_parts):

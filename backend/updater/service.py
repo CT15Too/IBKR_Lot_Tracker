@@ -88,10 +88,10 @@ class UpdateService:
     def _persist_completed_check(self, completed_at: datetime) -> None:
         settings = self._settings_store.load()
         timestamp = completed_at.isoformat()
+        self._last_checked_at = timestamp
         self._settings_store.save(
             dataclasses.replace(settings, last_update_check_at=timestamp)
         )
-        self._last_checked_at = timestamp
 
     def snapshot(self) -> UpdateSnapshot:
         with self._lock:
@@ -116,6 +116,15 @@ class UpdateService:
                 now = self._now()
                 last = self._parse_timestamp(settings.last_update_check_at)
                 if last is not None and last > now:
+                    in_memory_last = self._parse_timestamp(
+                        self._last_checked_at
+                    )
+                    if (
+                        in_memory_last is not None
+                        and in_memory_last <= now
+                        and now - in_memory_last < _CHECK_INTERVAL
+                    ):
+                        return False
                     clamped = now.isoformat()
                     self._last_checked_at = clamped
                     try:
@@ -125,8 +134,9 @@ class UpdateService:
                             )
                         )
                     except Exception:
-                        pass
-                    return False
+                        last = None
+                    else:
+                        return False
                 if (
                     last is not None
                     and now - last < _CHECK_INTERVAL

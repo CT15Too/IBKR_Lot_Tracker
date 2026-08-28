@@ -162,28 +162,16 @@ def test_dedicated_transport_strips_ambient_credentials_on_every_redirect():
     ]
 
 
-def test_latest_release_ignores_prereleases_and_fetches_named_assets():
+def test_latest_stable_uses_github_endpoint_without_page_limit():
     session = FakeSession(
-        [
-            response(
-                200,
-                json_body=[
-                    {
-                        "tag_name": "v2.0.0-rc.1",
-                        "prerelease": True,
-                        "draft": False,
-                        "assets": [],
-                    },
-                    stable_release(),
-                ],
-            )
-        ]
+        [response(200, json_body=stable_release())]
     )
     release = GithubReleaseClient(session, REPOSITORY).latest_stable()
     assert release.tag == "v1.2.0"
     assert release.release_notes == "notes"
     assert release.manifest_url == MANIFEST_URL
-    assert session.calls[0][0].endswith("/releases?per_page=10")
+    assert session.calls[0][0].endswith("/releases/latest")
+    assert "per_page" not in session.calls[0][0]
     assert session.calls[0][1] == {
         "allow_redirects": False,
         "headers": {"Authorization": None},
@@ -198,10 +186,29 @@ def test_release_requires_exact_named_assets():
         {"name": "update-manifest.json", "browser_download_url": MANIFEST_URL}
     )
     client = GithubReleaseClient(
-        FakeSession([response(200, json_body=[stable_release(duplicate_assets)])]),
+        FakeSession([response(200, json_body=stable_release(duplicate_assets))]),
         REPOSITORY,
     )
     with pytest.raises(UpdateNetworkError, match="exactly one"):
+        client.latest_stable()
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"draft": True},
+        {"prerelease": True},
+        {"draft": 0},
+        {"prerelease": 0},
+    ],
+)
+def test_latest_endpoint_response_must_be_exactly_stable(changes):
+    release = stable_release()
+    release.update(changes)
+    client = GithubReleaseClient(
+        FakeSession([response(200, json_body=release)]), REPOSITORY
+    )
+    with pytest.raises(UpdateNetworkError, match="stable"):
         client.latest_stable()
 
 

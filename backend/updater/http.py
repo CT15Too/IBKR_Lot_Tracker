@@ -155,34 +155,26 @@ class GithubReleaseClient:
             response.close()
 
     def latest_stable(self) -> GithubRelease:
-        url = (
-            "https://api.github.com/repos/{}/releases?per_page=10".format(
-                self._repository
-            )
+        url = "https://api.github.com/repos/{}/releases/latest".format(
+            self._repository
         )
         body = self.fetch_bytes(url)
         try:
-            releases = json.loads(body)
+            release = json.loads(body)
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise UpdateNetworkError("GitHub returned invalid release metadata") from exc
-        if not isinstance(releases, list):
+        if not isinstance(release, dict):
             raise UpdateNetworkError("GitHub returned invalid release metadata")
-
-        stable = next(
-            (
-                release
-                for release in releases
-                if isinstance(release, dict)
-                and release.get("draft") is False
-                and release.get("prerelease") is False
-            ),
-            None,
-        )
-        if stable is None:
-            raise UpdateNetworkError("No stable GitHub release was found")
-        tag = stable.get("tag_name")
-        notes = stable.get("body")
-        assets = stable.get("assets")
+        if (
+            release.get("draft") is not False
+            or release.get("prerelease") is not False
+        ):
+            raise UpdateNetworkError(
+                "GitHub latest release response is not stable"
+            )
+        tag = release.get("tag_name")
+        notes = release.get("body")
+        assets = release.get("assets")
         if not isinstance(tag, str) or not isinstance(notes, str):
             raise UpdateNetworkError("GitHub release metadata is incomplete")
         if not isinstance(assets, list):
