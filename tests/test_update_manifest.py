@@ -94,6 +94,15 @@ def test_rejects_tampered_manifest_before_parsing_urls(monkeypatch):
         select(body + b" ", signature, public)
 
 
+@pytest.mark.parametrize("schema_version", [True, 1.0])
+def test_schema_version_requires_exact_integer(schema_version):
+    body, signature, public = signed_manifest(
+        manifest_overrides={"schema_version": schema_version}
+    )
+    with pytest.raises(ManifestError, match="schema"):
+        select(body, signature, public)
+
+
 def test_rejects_wrong_platform_and_newer_required_updater():
     body, signature, public = signed_manifest(
         os_name="windows", package="exe"

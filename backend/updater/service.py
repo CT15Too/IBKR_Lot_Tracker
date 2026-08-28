@@ -6,7 +6,11 @@ from typing import Callable, Optional
 
 from backend.runtime import LaunchMode
 
-from .download import DownloadCancelled, DownloadError
+from .download import (
+    DownloadCancellationToken,
+    DownloadCancelled,
+    DownloadError,
+)
 from .http import UpdateNetworkError
 from .manifest import ManifestError
 from .models import UpdateSnapshot, UpdateStatus, VerifiedUpdate
@@ -47,6 +51,7 @@ class UpdateService:
         self._error = None
         self._staged_path = None
         self._cancel = None
+        self._launch_committed = False
         try:
             self._last_checked_at = (
                 self._settings_store.load().last_update_check_at
@@ -110,9 +115,20 @@ class UpdateService:
                     return False
                 now = self._now()
                 last = self._parse_timestamp(settings.last_update_check_at)
+                if last is not None and last > now:
+                    clamped = now.isoformat()
+                    self._last_checked_at = clamped
+                    try:
+                        self._settings_store.save(
+                            dataclasses.replace(
+                                settings, last_update_check_at=clamped
+                            )
+                        )
+                    except Exception:
+                        pass
+                    return False
                 if (
                     last is not None
-                    and last <= now
                     and now - last < _CHECK_INTERVAL
                 ):
                     self._last_checked_at = settings.last_update_check_at
@@ -166,7 +182,7 @@ class UpdateService:
                 )
             self._status = UpdateStatus.DOWNLOADING
             self._error = None
-            self._cancel = threading.Event()
+            self._cancel = DownloadCancellationToken()
             cancel = self._cancel
 
         try:
@@ -195,6 +211,7 @@ class UpdateService:
         with self._lock:
             self._staged_path = Path(staged_path)
             self._cancel = None
+            self._launch_committed = False
             self._status = UpdateStatus.READY_TO_RESTART
             return self.snapshot()
 
@@ -217,6 +234,10 @@ class UpdateService:
 
     def restart_and_update(self):
         with self._lock:
+            if self._launch_committed:
+                raise UpdateTransitionError(
+                    "Update installer launch is already committed"
+                )
             self._require_status(UpdateStatus.READY_TO_RESTART)
             if self._installer is None or self._staged_path is None:
                 raise UpdateTransitionError(
@@ -224,10 +245,12 @@ class UpdateService:
                 )
             installer = self._installer
             staged_path = self._staged_path
+            self._launch_committed = True
         try:
             return installer(staged_path)
         except Exception:
             with self._lock:
                 self._status = UpdateStatus.FAILED
                 self._error = "Could not start the update installer"
+                self._launch_committed = False
             raise

@@ -1,10 +1,12 @@
 import dataclasses
 import hashlib
+import os
 import threading
 
 import pytest
 
 from backend.updater.download import (
+    DownloadCancellationToken,
     DownloadCancelled,
     DownloadError,
     download_artifact,
@@ -69,8 +71,8 @@ def test_interruption_keeps_current_install_and_removes_only_own_partial(tmp_pat
 
 
 def test_cancel_removes_partial(tmp_path):
-    cancel = threading.Event()
-    cancel.set()
+    cancel = DownloadCancellationToken()
+    cancel.cancel()
     with pytest.raises(DownloadCancelled):
         download_artifact(
             FakeClient([b"abc"]),
@@ -79,6 +81,47 @@ def test_cancel_removes_partial(tmp_path):
             cancel=cancel,
         )
     assert not list(tmp_path.iterdir())
+
+
+def test_cancel_is_serialized_with_atomic_publication(tmp_path, monkeypatch):
+    token = DownloadCancellationToken()
+    entered_replace = threading.Event()
+    allow_replace = threading.Event()
+    cancel_returned = threading.Event()
+    errors = []
+    real_replace = os.replace
+
+    def blocking_replace(source, destination):
+        entered_replace.set()
+        assert allow_replace.wait(timeout=2)
+        real_replace(source, destination)
+
+    monkeypatch.setattr(os, "replace", blocking_replace)
+    artifact = artifact_for(b"abc")
+
+    def run_download():
+        try:
+            download_artifact(
+                FakeClient([b"abc"]), artifact, tmp_path, cancel=token
+            )
+        except Exception as exc:
+            errors.append(exc)
+
+    download_thread = threading.Thread(target=run_download)
+    download_thread.start()
+    assert entered_replace.wait(timeout=1)
+    cancel_thread = threading.Thread(
+        target=lambda: (token.cancel(), cancel_returned.set())
+    )
+    cancel_thread.start()
+    assert not cancel_returned.wait(timeout=0.1)
+    allow_replace.set()
+    download_thread.join(timeout=2)
+    cancel_thread.join(timeout=2)
+
+    assert errors == []
+    assert cancel_returned.is_set()
+    assert (tmp_path / artifact.name).read_bytes() == b"abc"
 
 
 @pytest.mark.parametrize("change", ["size", "sha256"])

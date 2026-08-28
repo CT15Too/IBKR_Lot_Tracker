@@ -33,11 +33,24 @@ class GithubRelease:
 
 
 class GithubReleaseClient:
-    def __init__(self, session, repository: str):
+    def __init__(self, session=None, repository: str = ""):
         if not _REPOSITORY.fullmatch(repository):
             raise ValueError("Invalid GitHub repository identifier")
-        self._session = session
+        self._session = requests.Session() if session is None else session
+        self._strip_ambient_credentials()
         self._repository = repository
+
+    def _strip_ambient_credentials(self) -> None:
+        if hasattr(self._session, "trust_env"):
+            self._session.trust_env = False
+        if hasattr(self._session, "auth"):
+            self._session.auth = None
+        headers = getattr(self._session, "headers", None)
+        if headers is not None:
+            headers.pop("Authorization", None)
+        cookies = getattr(self._session, "cookies", None)
+        if cookies is not None:
+            cookies.clear()
 
     @staticmethod
     def _validate_url(url: str, *, redirect: bool = False) -> None:
@@ -64,6 +77,7 @@ class GithubReleaseClient:
         redirects = 0
         while True:
             try:
+                self._strip_ambient_credentials()
                 response = self._session.get(
                     url,
                     allow_redirects=False,

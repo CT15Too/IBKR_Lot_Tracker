@@ -3,6 +3,7 @@ import hmac
 import os
 import re
 import tempfile
+import threading
 from pathlib import Path
 from typing import Optional
 
@@ -15,6 +16,30 @@ class DownloadError(RuntimeError):
 
 class DownloadCancelled(DownloadError):
     pass
+
+
+class DownloadCancellationToken:
+    def __init__(self):
+        self._event = threading.Event()
+        self._publish_lock = threading.Lock()
+
+    def cancel(self) -> None:
+        with self._publish_lock:
+            self._event.set()
+
+    set = cancel
+
+    def is_set(self) -> bool:
+        return self._event.is_set()
+
+    def wait(self, timeout=None) -> bool:
+        return self._event.wait(timeout)
+
+    def publish(self, action) -> None:
+        with self._publish_lock:
+            if self._event.is_set():
+                raise DownloadCancelled("Update download was cancelled")
+            action()
 
 
 _SAFE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._ ()+-]*$")
@@ -94,9 +119,14 @@ def download_artifact(
             raise DownloadError("Downloaded artifact size does not match manifest")
         if not hmac.compare_digest(digest.hexdigest(), artifact.sha256):
             raise DownloadError("Downloaded artifact sha256 does not match manifest")
-        if cancel is not None and cancel.is_set():
-            raise DownloadCancelled("Update download was cancelled")
-        os.replace(partial, final)
+        if cancel is None:
+            os.replace(partial, final)
+        elif hasattr(cancel, "publish"):
+            cancel.publish(lambda: os.replace(partial, final))
+        else:
+            raise DownloadError(
+                "Downloader requires a synchronized cancellation token"
+            )
         partial = None
         os.chmod(final, 0o600)
         _fsync_directory(directory)

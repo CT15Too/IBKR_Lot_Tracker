@@ -46,6 +46,27 @@ class FakeSession:
         return next_response
 
 
+class CredentialSession(FakeSession):
+    def __init__(self, responses):
+        super().__init__(responses)
+        self.auth = ("netrc-user", "netrc-password")
+        self.trust_env = True
+        self.headers = {"Authorization": "Basic inherited"}
+        self.cookies = {"session": "inherited-cookie"}
+        self.credential_snapshots = []
+
+    def get(self, url, **kwargs):
+        self.credential_snapshots.append(
+            {
+                "auth": self.auth,
+                "trust_env": self.trust_env,
+                "authorization": self.headers.get("Authorization"),
+                "cookies": dict(self.cookies),
+            }
+        )
+        return super().get(url, **kwargs)
+
+
 def response(status, *, body=b"", json_body=None, headers=None):
     if json_body is not None:
         body = json.dumps(json_body).encode()
@@ -108,6 +129,37 @@ def test_follows_only_five_allowed_https_redirects():
     client = GithubReleaseClient(FakeSession(redirects), REPOSITORY)
     with pytest.raises(UpdateNetworkError, match="redirects"):
         client.fetch_bytes(MANIFEST_URL)
+
+
+def test_dedicated_transport_strips_ambient_credentials_on_every_redirect():
+    session = CredentialSession(
+        [
+            response(
+                302,
+                headers={
+                    "Location": "https://objects.githubusercontent.com/update"
+                },
+            ),
+            response(200, body=b"manifest"),
+        ]
+    )
+    assert GithubReleaseClient(session, REPOSITORY).fetch_bytes(MANIFEST_URL) == (
+        b"manifest"
+    )
+    assert session.credential_snapshots == [
+        {
+            "auth": None,
+            "trust_env": False,
+            "authorization": None,
+            "cookies": {},
+        },
+        {
+            "auth": None,
+            "trust_env": False,
+            "authorization": None,
+            "cookies": {},
+        },
+    ]
 
 
 def test_latest_release_ignores_prereleases_and_fetches_named_assets():

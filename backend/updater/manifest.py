@@ -112,7 +112,7 @@ def verify_and_select(
     if not isinstance(raw, dict):
         raise ManifestError("Signed manifest must be an object")
     _require_exact_keys(raw, _MANIFEST_KEYS, "Manifest")
-    if isinstance(raw["schema_version"], bool) or raw["schema_version"] != 1:
+    if type(raw["schema_version"]) is not int or raw["schema_version"] != 1:
         raise ManifestError("Unsupported manifest schema version")
     if not isinstance(raw["release_notes"], str):
         raise ManifestError("Release notes must be text")

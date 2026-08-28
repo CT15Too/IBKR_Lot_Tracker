@@ -64,6 +64,22 @@ class BlockingDownloader:
         raise DownloadCancelled("cancelled")
 
 
+class BlockingInstaller:
+    def __init__(self, *, fail=False):
+        self.started = threading.Event()
+        self.release = threading.Event()
+        self.calls = 0
+        self.fail = fail
+
+    def __call__(self, path):
+        self.calls += 1
+        self.started.set()
+        self.release.wait(timeout=2)
+        if self.fail:
+            raise RuntimeError("launch failed")
+        return path.name
+
+
 @pytest.fixture
 def update():
     return VerifiedUpdate(
@@ -154,6 +170,44 @@ def test_manual_checks_bypass_persisted_cadence(service_parts):
     service.check(manual=False)
     assert service.check(manual=True) is True
     assert discovery.calls == 2
+
+
+def test_future_persisted_check_is_clamped_and_remains_recent(
+    tmp_path, update, clock
+):
+    store = SettingsStore(tmp_path / "settings.json")
+    store.save(
+        DesktopSettings(
+            last_update_check_at=(clock() + timedelta(days=7)).isoformat()
+        )
+    )
+    discovery = FakeDiscovery(update)
+    runtime = SimpleNamespace(
+        mode=LaunchMode.PACKAGED_DESKTOP, staging_dir=tmp_path / "updates"
+    )
+    service = UpdateService(
+        runtime=runtime,
+        settings_store=store,
+        discovery=discovery,
+        downloader=FakeDownloader(),
+        clock=clock,
+    )
+
+    assert service.check(manual=False) is False
+    assert discovery.calls == 0
+    assert store.load().last_update_check_at == clock().isoformat()
+
+    clock.advance(hours=23)
+    restarted = UpdateService(
+        runtime=runtime,
+        settings_store=store,
+        discovery=discovery,
+        downloader=FakeDownloader(),
+        clock=clock,
+    )
+    assert restarted.check(manual=False) is False
+    clock.advance(hours=1)
+    assert restarted.check(manual=False) is True
 
 
 def test_failures_preserve_use_of_application_and_hide_paths(service_parts):
@@ -253,3 +307,60 @@ def test_restart_uses_internal_staged_path_without_exposing_it(service):
     service.approve_download()
     assert service.restart_and_update() == "IBKR-Lot-Tracker.dmg"
     assert "path" not in service.snapshot().to_public_dict()
+
+
+def test_restart_commits_launch_before_calling_external_installer(
+    tmp_path, update, clock
+):
+    installer = BlockingInstaller()
+    service = UpdateService(
+        runtime=SimpleNamespace(
+            mode=LaunchMode.PACKAGED_DESKTOP, staging_dir=tmp_path / "updates"
+        ),
+        settings_store=SettingsStore(tmp_path / "settings.json"),
+        discovery=FakeDiscovery(update),
+        downloader=FakeDownloader(),
+        installer=installer,
+        clock=clock,
+    )
+    service.check(manual=True)
+    service.approve_download()
+
+    thread = threading.Thread(target=service.restart_and_update)
+    thread.start()
+    assert installer.started.wait(timeout=1)
+    with pytest.raises(UpdateTransitionError, match="already"):
+        service.restart_and_update()
+    installer.release.set()
+    thread.join(timeout=2)
+
+    assert not thread.is_alive()
+    assert installer.calls == 1
+    with pytest.raises(UpdateTransitionError, match="already"):
+        service.restart_and_update()
+
+
+def test_restart_launch_failure_transitions_failed_without_retry(
+    tmp_path, update, clock
+):
+    installer = BlockingInstaller(fail=True)
+    installer.release.set()
+    service = UpdateService(
+        runtime=SimpleNamespace(
+            mode=LaunchMode.PACKAGED_DESKTOP, staging_dir=tmp_path / "updates"
+        ),
+        settings_store=SettingsStore(tmp_path / "settings.json"),
+        discovery=FakeDiscovery(update),
+        downloader=FakeDownloader(),
+        installer=installer,
+        clock=clock,
+    )
+    service.check(manual=True)
+    service.approve_download()
+
+    with pytest.raises(RuntimeError, match="launch failed"):
+        service.restart_and_update()
+    assert service.snapshot().status == UpdateStatus.FAILED
+    with pytest.raises(UpdateTransitionError, match="failed"):
+        service.restart_and_update()
+    assert installer.calls == 1
