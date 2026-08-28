@@ -26,6 +26,16 @@ def test_source_desktop_uses_linux_xdg_data(monkeypatch, tmp_path):
     assert runtime.database_path == runtime.data_dir / "lots.db"
 
 
+def test_empty_linux_xdg_data_home_uses_default(monkeypatch, tmp_path):
+    monkeypatch.setenv("XDG_DATA_HOME", "")
+
+    runtime = build_runtime(
+        LaunchMode.SOURCE_DESKTOP, platform_name="linux", home=tmp_path
+    )
+
+    assert runtime.data_dir == tmp_path / ".local/share/ibkr-lot-tracker"
+
+
 def test_packaged_platform_data_paths(monkeypatch, tmp_path):
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "Local"))
     mac = build_runtime(

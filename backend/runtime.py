@@ -51,7 +51,7 @@ def build_runtime(
         database_path = data_dir / "lots.db"
     else:
         xdg_data_home = Path(
-            os.environ.get("XDG_DATA_HOME", home_path / ".local/share")
+            os.environ.get("XDG_DATA_HOME") or home_path / ".local/share"
         )
         data_dir = xdg_data_home / "ibkr-lot-tracker"
         database_path = data_dir / "lots.db"
