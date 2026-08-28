@@ -5,3 +5,8 @@ python-dotenv==1.0.1
 yfinance==0.2.43
 apscheduler==3.10.4
 pydantic==2.9.2
+pywebview==6.2.1
+keyring==25.7.0
+cryptography==50.0.1
+semantic-version==2.10.0
+filelock==3.19.1
