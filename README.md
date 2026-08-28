@@ -1,8 +1,12 @@
 # IBKR Lot Tracker
 
-> See every individual lot you hold — not just the blended average IBKR shows you.
+> The per-lot breakdown that IBKR's own interface doesn't give you.
 
-IBKR groups your positions by ticker and shows one blended average price. This app breaks each position into its individual purchase lots so you can instantly see which are in profit (sell) and which are underwater (hold). It also tracks cash balances and handles multi-currency accounts (USD + SGD out of the box).
+**IBKR does not show individual lot detail in its UI.** Every position appears as a single blended average cost — so if you bought AAPL at $150, $170, and $190, IBKR just shows you one average. You have no way to tell which lots are in profit and which are underwater without doing the math yourself.
+
+This app pulls your raw lot data directly from IBKR's **Flex Web Service** (the same data IBKR uses internally, just not surfaced in their UI) and visualises every individual purchase lot — open date, cost per share, current price, unrealized P&L — so you can make informed sell decisions at a glance.
+
+It also tracks cash balances and handles multi-currency accounts (USD + SGD out of the box).
 
 Not affiliated with or endorsed by Interactive Brokers.
 
