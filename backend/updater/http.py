@@ -67,6 +67,7 @@ class GithubReleaseClient:
                 response = self._session.get(
                     url,
                     allow_redirects=False,
+                    headers={"Authorization": None},
                     timeout=(5, 30),
                     stream=True,
                 )

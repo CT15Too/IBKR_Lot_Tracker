@@ -134,6 +134,7 @@ def test_latest_release_ignores_prereleases_and_fetches_named_assets():
     assert session.calls[0][0].endswith("/releases?per_page=10")
     assert session.calls[0][1] == {
         "allow_redirects": False,
+        "headers": {"Authorization": None},
         "timeout": (5, 30),
         "stream": True,
     }
