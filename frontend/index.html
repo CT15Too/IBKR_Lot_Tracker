@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>IBKR Lot Tracker</title>
+<style>
+  /*
+    Variables live on :root/html only (never re-pinned on a descendant
+    element) so that every element in the document -- including <body>,
+    which is an ANCESTOR of .wrap, not a descendant of it -- inherits the
+    same values. This is a single-theme full page (not a chart embedded in
+    a host page with its own scheme), so there's no need for a separate
+    .viz-root scope.
+  */
+  :root {
+    color-scheme: light;
+    --surface-1:      #fcfcfb;
+    --page-plane:     #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --gridline:       #e1e0d9;
+    --baseline:       #c3c2b7;
+    --border:         rgba(11,11,11,0.10);
+    --good:           #0ca30c;
+    --good-text:      #006300;
+    --critical:       #d03b3b;
+    --card-shadow:    0 1px 2px rgba(11,11,11,0.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) {
+      color-scheme: dark;
+      --surface-1:      #1a1a19;
+      --page-plane:     #0d0d0d;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --gridline:       #2c2c2a;
+      --baseline:       #383835;
+      --border:         rgba(255,255,255,0.10);
+      --good:           #0ca30c;
+      --good-text:      #0ca30c;
+      --critical:       #e66767;
+      --card-shadow:    0 1px 2px rgba(0,0,0,0.4);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --surface-1:      #1a1a19;
+    --page-plane:     #0d0d0d;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+    --gridline:       #2c2c2a;
+    --baseline:       #383835;
+    --border:         rgba(255,255,255,0.10);
+    --good:           #0ca30c;
+    --good-text:      #0ca30c;
+    --critical:       #e66767;
+    --card-shadow:    0 1px 2px rgba(0,0,0,0.4);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--page-plane);
+    color: var(--text-primary);
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 24px 20px 64px; }
+
+  header.topbar {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 16px; flex-wrap: wrap; margin-bottom: 20px;
+  }
+  header.topbar h1 { font-size: 22px; margin: 0 0 4px; }
+  header.topbar p.sub { margin: 0; color: var(--text-secondary); font-size: 14px; }
+  .controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .controls .meta { font-size: 12px; color: var(--text-muted); }
+
+  button {
+    font: inherit; font-size: 13px; font-weight: 600;
+    padding: 8px 14px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--surface-1); color: var(--text-primary); cursor: pointer;
+  }
+  button:hover:not(:disabled) { border-color: var(--text-muted); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button.primary { background: #2a78d6; color: #ffffff; border-color: #2a78d6; }
+  button.icon { padding: 8px 10px; }
+
+  .stat-row {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    gap: 12px; margin-bottom: 24px;
+  }
+  .stat-tile {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px 16px; box-shadow: var(--card-shadow);
+  }
+  .stat-tile .label { font-size: 12px; color: var(--text-secondary); margin-bottom: 6px; }
+  .stat-tile .value { font-size: 20px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .stat-tile .value.good { color: var(--good-text); }
+  .stat-tile .value.critical { color: var(--critical); }
+
+  .state-banner {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
+    padding: 32px 20px; text-align: center; color: var(--text-secondary);
+  }
+  .state-banner.error { color: var(--critical); }
+
+  .symbol-card {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
+    box-shadow: var(--card-shadow); margin-bottom: 16px; overflow: hidden;
+  }
+  .symbol-header {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding: 14px 18px; cursor: pointer; flex-wrap: wrap;
+  }
+  .symbol-header .id .symbol { font-size: 16px; font-weight: 700; }
+  .symbol-header .id .desc { font-size: 12px; color: var(--text-muted); }
+  .symbol-header .figures { display: flex; gap: 22px; align-items: baseline; flex-wrap: wrap; }
+  .figures .fig .label { font-size: 11px; color: var(--text-muted); }
+  .figures .fig .val { font-size: 14px; font-variant-numeric: tabular-nums; }
+  .figures .fig .val.good { color: var(--good-text); font-weight: 600; }
+  .figures .fig .val.critical { color: var(--critical); font-weight: 600; }
+
+  table.lots {
+    width: 100%; border-collapse: collapse; font-size: 13px;
+    border-top: 1px solid var(--gridline);
+  }
+  table.lots th {
+    text-align: right; font-weight: 500; color: var(--text-muted);
+    padding: 8px 18px; border-bottom: 1px solid var(--gridline); font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.02em;
+  }
+  table.lots th:first-child, table.lots td:first-child { text-align: left; }
+  table.lots td {
+    padding: 9px 18px; text-align: right; font-variant-numeric: tabular-nums;
+    border-bottom: 1px solid var(--gridline);
+  }
+  table.lots tr:last-child td { border-bottom: none; }
+
+  .badge {
+    display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px;
+    border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap;
+  }
+  .badge.good { background: color-mix(in srgb, var(--good) 15%, transparent); color: var(--good-text); }
+  .badge.critical { background: color-mix(in srgb, var(--critical) 15%, transparent); color: var(--critical); }
+  .badge.unknown { background: color-mix(in srgb, var(--text-muted) 15%, transparent); color: var(--text-muted); }
+
+  .sellable-pill {
+    font-size: 11px; padding: 3px 9px; border-radius: 999px;
+    background: color-mix(in srgb, var(--good) 12%, transparent); color: var(--good-text); font-weight: 600;
+  }
+
+  footer { margin-top: 32px; font-size: 12px; color: var(--text-muted); text-align: center; }
+  footer a { color: inherit; }
+
+  .set-price-btn {
+    font-size: 11px; padding: 2px 6px; border-radius: 5px; margin-left: 6px;
+    border: 1px solid var(--border); background: transparent; color: var(--text-muted);
+    cursor: pointer; vertical-align: middle;
+  }
+  .set-price-btn:hover { border-color: var(--text-muted); color: var(--text-primary); }
+  .price-input-wrap { display: inline-flex; align-items: center; gap: 4px; }
+  .price-input-wrap input {
+    width: 80px; font: inherit; font-size: 13px; padding: 2px 6px;
+    border: 1px solid var(--text-muted); border-radius: 5px;
+    background: var(--surface-1); color: var(--text-primary); text-align: right;
+  }
+  .price-input-wrap button { font-size: 11px; padding: 2px 7px; }
+
+  .symbol-header { user-select: none; }
+  .symbol-header .chevron { font-size: 11px; color: var(--text-muted); margin-left: 8px; transition: transform 0.15s; display: inline-block; }
+  .symbol-card.collapsed .chevron { transform: rotate(-90deg); }
+  .symbol-card.collapsed .lots { display: none; }
+
+  .section-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin: 24px 0 12px; gap: 12px;
+  }
+  .section-header h2 {
+    font-size: 13px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--text-muted); margin: 0;
+  }
+  .section-header .section-controls { display: flex; gap: 8px; align-items: center; }
+</style>
+</head>
+<body>
+<div class="wrap viz-root">
+  <header class="topbar">
+    <div>
+      <h1>IBKR Lot Tracker</h1>
+      <p class="sub">Per-lot cost basis, not just the blended average IBKR shows you.</p>
+    </div>
+    <div class="controls">
+      <span class="meta" id="lastFetched">—</span>
+      <button id="refreshPricesBtn" title="Fetches current prices from Yahoo Finance (~15min delayed). Auto-refreshes every 60 seconds.">↻ Prices</button>
+      <button id="refreshLotsBtn" class="primary" title="Pulls a fresh lot report from IBKR Flex Web Service. Auto-refreshes every 15 minutes (IBKR's own cadence).">⇩ Refresh from IBKR</button>
+      <button id="themeToggle" class="icon" title="Toggle theme">◐</button>
+    </div>
+  </header>
+
+  <div id="fxRow" style="font-size:12px;color:var(--text-muted);margin:0 0 12px;display:none;"></div>
+
+  <div id="cashSection" style="display:none;">
+    <div class="section-header"><h2>Cash</h2></div>
+    <div id="cashRow" class="stat-row"></div>
+  </div>
+
+  <div id="positionsSection" style="display:none;">
+    <div class="section-header">
+      <h2>Positions</h2>
+      <div class="section-controls">
+        <button id="collapseAllBtn" title="Collapse all">⊟ Collapse</button>
+        <button id="expandAllBtn" title="Expand all">⊞ Expand</button>
+      </div>
+    </div>
+    <div id="statRow" class="stat-row"></div>
+    <div id="content"></div>
+  </div>
+
+  <div id="bannerContent"></div>
+
+  <footer>
+    Prices are delayed quotes, not IBKR-guaranteed. Lot data reflects your last Flex report refresh, not real time.
+  </footer>
+</div>
+
+<script>
+const state = { data: null, loading: false };
+
+function fmtMoney(v, ccy) {
+  if (v === null || v === undefined) return '—';
+  const code = ccy || 'USD';
+  const sign = v < 0 ? '-' : '';
+  const abs = Math.abs(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return `${code}\u00a0${sign}${abs}`;
+}
+function fmtPnl(native, usd, ccy, pct) {
+  if (native === null || native === undefined) return '—';
+  const pctStr = pct !== null && pct !== undefined ? ` (${fmtPct(pct)})` : '';
+  if (!ccy || ccy === 'USD') return fmtMoney(native, 'USD') + pctStr;
+  const usdLine = usd !== null && usd !== undefined
+    ? `<br><span style="font-size:12px;font-weight:500;opacity:0.75">${fmtMoney(usd, 'USD')}${pctStr}</span>`
+    : pctStr;
+  return fmtMoney(native, ccy) + pctStr + usdLine;
+}
+function fmtPct(v) {
+  if (v === null || v === undefined) return '—';
+  const sign = v > 0 ? '+' : '';
+  return sign + v.toFixed(2) + '%';
+}
+function fmtQty(v) {
+  return Number(v).toLocaleString(undefined, { maximumFractionDigits: 4 });
+}
+function fmtDate(s) {
+  if (!s) return '—';
+  // IBKR dates come as "YYYYMMDD;HHMMSS" or similar; normalize loosely.
+  const m = s.match(/^(\d{4})(\d{2})(\d{2})/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  return s;
+}
+function pnlClass(v) {
+  if (v === null || v === undefined) return 'unknown';
+  return v > 0 ? 'good' : (v < 0 ? 'critical' : 'unknown');
+}
+
+function renderStatRow(summary, cashData) {
+  const el = document.getElementById('statRow');
+
+  // Total P&L in USD (USD stocks native + SGD stocks converted)
+  const totalPnlUsd = summary.symbols.reduce((acc, s) => {
+    const v = s.currency !== 'USD' ? (s.unrealized_pnl_usd ?? 0) : (s.unrealized_pnl ?? 0);
+    return acc + v;
+  }, 0);
+
+  // Total P&L in SGD (SGD stocks native + USD stocks converted via fx)
+  const sgdFx = summary.symbols.find(s => s.currency === 'SGD')?.fx_rate ?? null;
+  const totalPnlSgd = sgdFx ? summary.symbols.reduce((acc, s) => {
+    if (s.currency === 'SGD') return acc + (s.unrealized_pnl ?? 0);
+    return acc + ((s.unrealized_pnl ?? 0) / sgdFx);
+  }, 0) : null;
+
+  // Market value in USD
+  const totalValue = summary.symbols.reduce((acc, s) => {
+    const mv = s.market_value ?? 0;
+    return acc + (s.currency !== 'USD' && s.fx_rate ? mv * s.fx_rate : mv);
+  }, 0);
+  // Market value in SGD
+  const totalValueSgd = sgdFx ? summary.symbols.reduce((acc, s) => {
+    const mv = s.market_value ?? 0;
+    return acc + (s.currency === 'SGD' ? mv : mv / sgdFx);
+  }, 0) : null;
+
+  const totalSellableQty = summary.symbols.reduce((acc, s) => acc + s.sellable_quantity, 0);
+  const lotCount = summary.symbols.reduce((acc, s) => acc + s.lots.length, 0);
+  const pnlCls = pnlClass(totalPnlUsd);
+  const pnlSgdLine = totalPnlSgd !== null
+    ? `<div style="font-size:12px;color:var(--text-muted);margin-top:2px">${fmtMoney(totalPnlSgd, 'SGD')}</div>` : '';
+
+  el.style.display = 'grid';
+  el.innerHTML = `
+    <div class="stat-tile">
+      <div class="label">Total unrealized P&amp;L</div>
+      <div class="value ${pnlCls}">${fmtMoney(totalPnlUsd)}</div>
+      ${pnlSgdLine}
+    </div>
+    <div class="stat-tile">
+      <div class="label">Total market value</div>
+      <div class="value">${fmtMoney(totalValue)}</div>
+      ${totalValueSgd !== null ? `<div style="font-size:12px;color:var(--text-muted);margin-top:2px">${fmtMoney(totalValueSgd, 'SGD')}</div>` : ''}
+    </div>
+    <div class="stat-tile">
+      <div class="label">Symbols tracked</div>
+      <div class="value">${summary.symbols.length}</div>
+    </div>
+    <div class="stat-tile">
+      <div class="label">Open lots</div>
+      <div class="value">${lotCount}</div>
+    </div>
+    <div class="stat-tile">
+      <div class="label">Shares sellable at a profit</div>
+      <div class="value good">${fmtQty(totalSellableQty)}</div>
+    </div>
+  `;
+}
+
+async function setManualPrice(symbol) {
+  const input = document.getElementById(`price-val-${symbol}`);
+  const val = parseFloat(input.value);
+  if (isNaN(val) || val <= 0) { input.focus(); return; }
+  await fetch('/api/prices/override', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ symbol, price: val }),
+  });
+  await loadLots(true);
+}
+
+function priceHeaderCell(symbol, price, manual) {
+  const manualTag = manual ? ' <span style="font-size:10px;color:var(--text-muted)" title="Manually set">✎</span>' : '';
+  const inputHtml = `<span class="price-input-wrap" id="price-wrap-${symbol}" style="display:none" onclick="event.stopPropagation()">
+      <input id="price-val-${symbol}" type="number" step="0.01" min="0" ${price !== null ? `value="${price}"` : 'placeholder="price"'} onkeydown="if(event.key==='Enter')setManualPrice('${symbol}')">
+      <button onclick="setManualPrice('${symbol}')">Set</button>
+    </span>`;
+  const editBtn = `<button class="set-price-btn" onclick="event.stopPropagation();document.getElementById('price-wrap-${symbol}').style.display='inline-flex';this.style.display='none'" title="Edit price">✎</button>`;
+  if (price !== null) {
+    return `${fmtMoney(price)}${manualTag} ${editBtn}${inputHtml}`;
+  }
+  return `— ${editBtn}${inputHtml}`;
+}
+
+function renderSymbolCard(s) {
+  const pnlCls = pnlClass(s.unrealized_pnl);
+  const lotsRows = s.lots.map(lot => {
+    const cls = pnlClass(lot.unrealized_pnl);
+    const badge = cls === 'good'
+      ? `<span class="badge good">▲ Profit</span>`
+      : cls === 'critical'
+        ? `<span class="badge critical">▼ Hold</span>`
+        : `<span class="badge unknown">? No price</span>`;
+    return `
+      <tr>
+        <td>${fmtDate(lot.open_datetime)}</td>
+        <td>${fmtQty(lot.quantity)}</td>
+        <td>${fmtMoney(lot.cost_price)} <span style="font-size:10px;color:var(--text-muted)">${lot.currency}</span></td>
+        <td>${lot.current_price !== null ? fmtMoney(lot.current_price) : '—'}</td>
+        <td class="${cls}">${fmtMoney(lot.unrealized_pnl, s.currency)}</td>
+        <td class="${cls}">${s.currency !== 'USD' && lot.unrealized_pnl_usd !== null ? fmtMoney(lot.unrealized_pnl_usd) : fmtPct(lot.unrealized_pnl_pct)}</td>
+        <td>${badge}</td>
+      </tr>`;
+  }).join('');
+
+  const currentDisplay = priceHeaderCell(s.symbol, s.current_price, s.manual_price);
+
+  const cardId = `card-${s.symbol}`;
+  return `
+    <div class="symbol-card" id="${cardId}">
+      <div class="symbol-header" onclick="document.getElementById('${cardId}').classList.toggle('collapsed')">
+        <div class="id">
+          <div class="symbol">${s.symbol} <span style="font-size:11px;font-weight:500;color:var(--text-muted);background:var(--gridline);padding:1px 6px;border-radius:4px;vertical-align:middle">${s.currency}</span><span class="chevron">▾</span></div>
+          <div class="desc">${s.description}</div>
+        </div>
+        <div class="figures">
+          <div class="fig"><div class="label">Qty</div><div class="val">${fmtQty(s.total_quantity)}</div></div>
+          <div class="fig"><div class="label">Avg cost</div><div class="val">${fmtMoney(s.avg_cost_price)}</div></div>
+          <div class="fig"><div class="label">Current</div><div class="val">${currentDisplay}</div></div>
+          <div class="fig"><div class="label">Unrealized P&amp;L</div><div class="val ${pnlCls}">${fmtPnl(s.unrealized_pnl, s.unrealized_pnl_usd, s.currency, s.unrealized_pnl_pct)}</div></div>
+          <div class="fig"><div class="label">Sellable now</div><div class="val"><span class="sellable-pill">${fmtQty(s.sellable_quantity)} sh</span></div></div>
+        </div>
+      </div>
+      <table class="lots">
+        <thead>
+          <tr>
+            <th>Opened</th><th>Qty</th><th>Cost / sh</th><th>Current</th>
+            <th>Unrealized ${s.currency}</th>
+            <th>${s.currency !== 'USD' ? 'Unrealized USD' : 'Unrealized %'}</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>${lotsRows}</tbody>
+      </table>
+    </div>`;
+}
+
+function renderBanner(message, isError) {
+  document.getElementById('positionsSection').style.display = 'none';
+  document.getElementById('bannerContent').innerHTML =
+    `<div class="state-banner ${isError ? 'error' : ''}">${message}</div>`;
+}
+
+async function loadCash() {
+  try {
+    const res = await fetch('/api/cash');
+    if (!res.ok) return;
+    const data = await res.json();
+
+    const sgdB = data.balances.find(b => b.currency === 'SGD');
+    const usdB = data.balances.find(b => b.currency === 'USD');
+    const sgdFx = sgdB?.fx_rate ?? null;
+
+    // Totals
+    const totalUsd = (usdB?.ending_cash ?? 0) + (sgdB?.ending_cash_usd ?? 0);
+    const totalSgd = sgdFx ? (usdB?.ending_cash ?? 0) / sgdFx + (sgdB?.ending_cash ?? 0) : null;
+
+    const el = document.getElementById('cashRow');
+    el.style.display = 'grid';
+
+    const perCcyTiles = data.balances.map(b => {
+      const usdLine = b.ending_cash_usd !== null && b.currency !== 'USD'
+        ? `<div style="font-size:12px;color:var(--text-muted);margin-top:2px">${fmtMoney(b.ending_cash_usd)}</div>` : '';
+      return `<div class="stat-tile">
+        <div class="label">Cash ${b.currency}</div>
+        <div class="value">${fmtMoney(b.ending_cash, b.currency)}</div>
+        ${usdLine}
+      </div>`;
+    }).join('');
+
+    const sgdTotalLine = totalSgd !== null
+      ? `<div style="font-size:12px;color:var(--text-muted);margin-top:2px">${fmtMoney(totalSgd, 'SGD')}</div>` : '';
+
+    el.innerHTML = perCcyTiles + `
+      <div class="stat-tile">
+        <div class="label">Total Cash</div>
+        <div class="value">${fmtMoney(totalUsd)}</div>
+        ${sgdTotalLine}
+      </div>`;
+
+    document.getElementById('cashSection').style.display = 'block';
+
+    // FX rate line
+    const fxRates = data.balances.filter(b => b.currency !== 'USD' && b.fx_rate);
+    const fxEl = document.getElementById('fxRow');
+    if (fxRates.length) {
+      fxEl.style.display = 'block';
+      fxEl.innerHTML = fxRates.map(b =>
+        `1 ${b.currency} = ${b.fx_rate.toFixed(6)} USD &nbsp;·&nbsp; 1 USD = ${(1/b.fx_rate).toFixed(6)} ${b.currency}`
+      ).join(' &nbsp;|&nbsp; ') + ' &nbsp;<span style="opacity:0.6">(Yahoo Finance, ~15min delayed)</span>';
+    }
+
+    return data;
+  } catch (_) { return null; }
+}
+
+async function loadLots(refreshPrices) {
+  try {
+    const res = await fetch(`/api/lots?refresh_prices=${refreshPrices ? 'true' : 'false'}`);
+    if (res.status === 404) {
+      renderBanner('No data yet. Click "Refresh from IBKR" to pull your first report.', false);
+      return;
+    }
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      renderBanner(body.detail || `Failed to load lots (HTTP ${res.status})`, true);
+      return;
+    }
+    const data = await res.json();
+    state.data = data;
+    document.getElementById('lastFetched').textContent =
+      'Lots as of ' + new Date(data.fetched_at).toLocaleString();
+
+    if (!data.symbols.length) {
+      renderBanner('No open positions found in your last IBKR report.', false);
+      return;
+    }
+    document.getElementById('bannerContent').innerHTML = '';
+    document.getElementById('positionsSection').style.display = 'block';
+    const cashData = await loadCash();
+    renderStatRow(data, cashData);
+    document.getElementById('content').innerHTML = data.symbols.map(renderSymbolCard).join('');
+  } catch (err) {
+    renderBanner('Could not reach the app backend: ' + err.message, true);
+  }
+}
+
+async function refreshFromIbkr(force) {
+  const btn = document.getElementById('refreshLotsBtn');
+  btn.disabled = true;
+  btn.textContent = 'Refreshing…';
+  try {
+    const res = await fetch(`/api/refresh-lots?force=${force ? 'true' : 'false'}`, { method: 'POST' });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      renderBanner(body.detail || `Refresh failed (HTTP ${res.status})`, true);
+      return;
+    }
+    await loadLots(true);
+  } catch (err) {
+    renderBanner('Could not reach the app backend: ' + err.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '⇩ Refresh from IBKR';
+  }
+}
+
+document.getElementById('refreshLotsBtn').addEventListener('click', () => refreshFromIbkr(false));
+document.getElementById('refreshPricesBtn').addEventListener('click', () => loadLots(true));
+document.getElementById('collapseAllBtn').addEventListener('click', () =>
+  document.querySelectorAll('.symbol-card').forEach(c => c.classList.add('collapsed')));
+document.getElementById('expandAllBtn').addEventListener('click', () =>
+  document.querySelectorAll('.symbol-card').forEach(c => c.classList.remove('collapsed')));
+
+const themeToggle = document.getElementById('themeToggle');
+themeToggle.addEventListener('click', () => {
+  const current = document.documentElement.getAttribute('data-theme');
+  document.documentElement.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
+});
+
+// Auto-refresh prices every 60s (Yahoo Finance cache TTL)
+const PRICE_POLL_MS = 60_000;
+setInterval(() => { if (document.visibilityState === 'visible') loadLots(true); }, PRICE_POLL_MS);
+
+// Auto-refresh IBKR lots every 15 min — backend enforces cooldown, 429 is swallowed silently
+const IBKR_POLL_MS = 15 * 60_000;
+async function autoRefreshIbkr() {
+  if (document.visibilityState !== 'visible') return;
+  const res = await fetch('/api/refresh-lots?force=false', { method: 'POST' }).catch(() => null);
+  if (res && res.ok) await loadLots(true); // only reload if new data came in
+}
+setInterval(autoRefreshIbkr, IBKR_POLL_MS);
+
+loadLots(false);
+</script>
+</body>
+</html>

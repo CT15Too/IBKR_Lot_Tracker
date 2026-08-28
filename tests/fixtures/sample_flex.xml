@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FlexQueryResponse queryName="Open Positions - Lots" type="AF">
+  <FlexStatements count="1">
+    <FlexStatement accountId="U1234567" fromDate="20260820" toDate="20260820" period="LastBusinessDay" whenGenerated="20260820;140500">
+      <OpenPositions>
+        <OpenPosition accountId="U1234567" currency="USD" fxRateToBase="1" assetCategory="STK"
+          symbol="AAPL" description="APPLE INC" conid="265598" listingExchange="NASDAQ"
+          multiplier="1" side="Long" position="10" markPrice="228.40" positionValue="2284.00"
+          openPrice="150.25" costBasisPrice="150.25" costBasisMoney="1502.50"
+          percentOfNAV="0.5" fifoPnlUnrealized="781.50" reportDate="20260820"
+          openDateTime="20260615;103200" levelOfDetail="LOT" />
+        <OpenPosition accountId="U1234567" currency="USD" fxRateToBase="1" assetCategory="STK"
+          symbol="AAPL" description="APPLE INC" conid="265598" listingExchange="NASDAQ"
+          multiplier="1" side="Long" position="5" markPrice="228.40" positionValue="1142.00"
+          openPrice="240.00" costBasisPrice="240.00" costBasisMoney="1200.00"
+          percentOfNAV="0.25" fifoPnlUnrealized="-58.00" reportDate="20260820"
+          openDateTime="20260710;093000" levelOfDetail="LOT" />
+        <OpenPosition accountId="U1234567" currency="USD" fxRateToBase="1" assetCategory="STK"
+          symbol="TSLA" description="TESLA INC" conid="76792991" listingExchange="NASDAQ"
+          multiplier="1" side="Long" position="3" markPrice="245.10" positionValue="735.30"
+          openPrice="260.75" costBasisPrice="260.75" costBasisMoney="782.25"
+          percentOfNAV="0.15" fifoPnlUnrealized="-46.95" reportDate="20260820"
+          openDateTime="20260801;140000" levelOfDetail="LOT" />
+        <OpenPosition accountId="U1234567" currency="USD" fxRateToBase="1" assetCategory="STK"
+          symbol="TSLA" description="TESLA INC" conid="76792991" listingExchange="NASDAQ"
+          multiplier="1" side="Long" position="2" markPrice="245.10" positionValue="490.20"
+          openPrice="190.00" costBasisPrice="190.00" costBasisMoney="380.00"
+          percentOfNAV="0.10" fifoPnlUnrealized="110.20" reportDate="20260820"
+          openDateTime="20260320;101500" levelOfDetail="LOT" />
+      </OpenPositions>
+    </FlexStatement>
+  </FlexStatements>
+</FlexQueryResponse>
