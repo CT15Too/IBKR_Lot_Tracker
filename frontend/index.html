@@ -685,7 +685,16 @@ async function loadUpdateStatus() {
   }
 }
 
+function beginUpdateAction(route) {
+  if (route === '/api/updates/check') {
+    renderUpdateStatus({ status: 'checking' });
+  } else if (route === '/api/updates/download') {
+    renderUpdateStatus({ status: 'downloading' });
+  }
+}
+
 async function runUpdateAction(route) {
+  beginUpdateAction(route);
   const response = await fetch(route, { method: 'POST' });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
@@ -695,14 +704,34 @@ async function runUpdateAction(route) {
   if (route !== '/api/updates/restart') renderUpdateStatus(body);
 }
 
+let previousSettingsFocus = null;
+
 function openSettings() {
+  previousSettingsFocus = document.activeElement;
+  const appRoot = document.querySelector('.viz-root');
+  if ('inert' in appRoot) appRoot.inert = true;
   document.getElementById('settingsPanel').hidden = false;
   document.getElementById('flexQueryId').focus();
 }
 
 function closeSettings() {
   document.getElementById('settingsPanel').hidden = true;
-  document.getElementById('settingsBtn').focus();
+  const appRoot = document.querySelector('.viz-root');
+  if ('inert' in appRoot) appRoot.inert = false;
+  if (previousSettingsFocus && previousSettingsFocus.focus) previousSettingsFocus.focus();
+}
+
+function trapFocus(event) {
+  const focusable = document.querySelector('.settings-dialog')
+    .querySelectorAll('button, input, [tabindex]:not([tabindex="-1"])');
+  if (focusable.length === 0) return;
+  if (event.shiftKey && document.activeElement === focusable[0]) {
+    focusable[focusable.length - 1].focus();
+    event.preventDefault();
+  } else if (!event.shiftKey && document.activeElement === focusable[focusable.length - 1]) {
+    focusable[0].focus();
+    event.preventDefault();
+  }
 }
 
 async function loadSettings() {
@@ -772,7 +801,9 @@ document.getElementById('settingsPanel').addEventListener('click', event => {
   if (event.target.id === 'settingsPanel') closeSettings();
 });
 document.addEventListener('keydown', event => {
-  if (event.key === 'Escape' && !document.getElementById('settingsPanel').hidden) closeSettings();
+  if (document.getElementById('settingsPanel').hidden) return;
+  if (event.key === 'Escape') closeSettings();
+  else if (event.key === 'Tab') trapFocus(event);
 });
 document.getElementById('collapseAllBtn').addEventListener('click', () =>
   document.querySelectorAll('.symbol-card').forEach(c => c.classList.add('collapsed')));

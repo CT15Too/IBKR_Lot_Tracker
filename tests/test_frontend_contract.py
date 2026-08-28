@@ -60,3 +60,26 @@ def test_all_update_states_and_browser_guidance_are_explicit():
     ]:
         assert f"case '{status}'" in HTML
     assert "Updates are installed through Git in browser mode" in HTML
+
+
+def test_long_update_actions_render_before_awaiting_backend_response():
+    assert "beginUpdateAction(route);" in HTML
+    assert HTML.index("beginUpdateAction(route);") < HTML.index(
+        "await fetch(route, { method: 'POST' })"
+    )
+    assert "renderUpdateStatus({ status: 'checking' })" in HTML
+    assert "renderUpdateStatus({ status: 'downloading' })" in HTML
+
+
+def test_settings_dialog_traps_focus_and_inerts_background():
+    for required in [
+        "previousSettingsFocus",
+        "event.shiftKey",
+        "focusable[0].focus()",
+        "focusable[focusable.length - 1].focus()",
+        "'inert' in appRoot",
+        "appRoot.inert = true",
+        "appRoot.inert = false",
+        "previousSettingsFocus.focus()",
+    ]:
+        assert required in HTML
