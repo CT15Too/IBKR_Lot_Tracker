@@ -10,11 +10,16 @@ pywebview runtime resources. Output binaries differ by platform:
 - Linux: a console-enabled executable consumed by the AppImage assembly
 """
 
+import os
 import sys
 
 from PyInstaller.utils.hooks import collect_all, collect_submodules
 
-datas = [("frontend", "frontend")]
+# Resolve paths relative to this spec file's directory (packaging/), so the
+# build works regardless of the directory PyInstaller is invoked from.
+ROOT = os.path.abspath(os.path.join(SPECPATH, os.pardir))
+
+datas = [(os.path.join(ROOT, "frontend"), "frontend")]
 binaries = []
 hiddenimports = [
     "uvicorn.logging",
@@ -34,8 +39,8 @@ binaries += webview_binaries
 hiddenimports += webview_hidden
 
 a = Analysis(
-    ["run_desktop.py"],
-    pathex=[],
+    [os.path.join(ROOT, "run_desktop.py")],
+    pathex=[ROOT],
     binaries=binaries,
     datas=datas,
     hiddenimports=hiddenimports,
