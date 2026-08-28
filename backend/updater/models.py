@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from enum import Enum
-from pathlib import Path
 from typing import Any, Dict, Optional
 
 
@@ -46,11 +45,17 @@ class UpdateSnapshot:
     release_notes: Optional[str] = None
     error: Optional[str] = None
     progress: Optional[float] = None
-    staged_path: Optional[Path] = None
+    last_checked_at: Optional[str] = None
 
     def to_public_dict(self) -> Dict[str, Any]:
         public: Dict[str, Any] = {"status": self.status.value}
-        for key in ("version", "release_notes", "error", "progress"):
+        for key in (
+            "version",
+            "release_notes",
+            "error",
+            "progress",
+            "last_checked_at",
+        ):
             value = getattr(self, key)
             if value is not None:
                 public[key] = value
