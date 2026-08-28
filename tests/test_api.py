@@ -27,7 +27,7 @@ def make_client(tmp_path, monkeypatch):
     monkeypatch.setattr(
         main_module,
         "get_current_prices",
-        lambda symbols, force_refresh=False: {
+        lambda symbols, force_refresh=False, overrides=None: {
             "AAPL": PriceQuote(symbol="AAPL", price=228.40, stale=False),
             "TSLA": PriceQuote(symbol="TSLA", price=245.10, stale=False),
         },
