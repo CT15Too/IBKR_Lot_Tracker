@@ -1,0 +1,250 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+
+env:
+  APP_VERSION: "0.1.0"
+
+jobs:
+  build-macos:
+    name: Build macOS
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require signing and notarization secrets
+        shell: bash
+        run: |
+          : "${MACOS_CERTIFICATE_P12:?MACOS_CERTIFICATE_P12 is required}"
+          : "${MACOS_CERTIFICATE_PASSWORD:?MACOS_CERTIFICATE_PASSWORD is required}"
+          : "${MACOS_SIGNING_IDENTITY:?MACOS_SIGNING_IDENTITY is required}"
+          : "${APPLE_ID:?APPLE_ID is required}"
+          : "${APPLE_APP_PASSWORD:?APPLE_APP_PASSWORD is required}"
+          : "${APPLE_TEAM_ID:?APPLE_TEAM_ID is required}"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Run tests
+        run: python -m pytest -q
+
+      - name: Build application bundle
+        run: python -m PyInstaller --clean --noconfirm packaging/ibkr_lot_tracker.spec
+
+      - name: Run packaged smoke test
+        run: python scripts/packaged_smoke.py "dist/IBKR Lot Tracker.app/Contents/MacOS/IBKR Lot Tracker"
+
+      - name: Sign and notarize
+        env:
+          MACOS_CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          codesign --deep --force --options runtime \
+            --sign "${MACOS_SIGNING_IDENTITY}" \
+            "dist/IBKR Lot Tracker.app"
+          hdiutil create -volname "IBKR Lot Tracker" \
+            -srcfolder "dist/IBKR Lot Tracker.app" \
+            -ov -format UDZO "dist/IBKR-Lot-Tracker.dmg"
+          xcrun notarytool submit "dist/IBKR-Lot-Tracker.dmg" \
+            --apple-id "${APPLE_ID}" --password "${APPLE_APP_PASSWORD}" \
+            --team-id "${APPLE_TEAM_ID}" --wait
+          xcrun stapler staple "dist/IBKR-Lot-Tracker.dmg"
+          spctl --assess --type open --context context:primary-signature \
+            -v "dist/IBKR-Lot-Tracker.dmg"
+
+      - name: Hash final artifact
+        run: shasum -a 256 "dist/IBKR-Lot-Tracker.dmg" | tee dist/artifact.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-artifact
+          path: |
+            dist/IBKR-Lot-Tracker.dmg
+            dist/artifact.sha256
+
+  build-windows:
+    name: Build Windows
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require signing secrets
+        shell: bash
+        run: |
+          : "${WINDOWS_CERTIFICATE_PFX:?WINDOWS_CERTIFICATE_PFX is required}"
+          : "${WINDOWS_CERTIFICATE_PASSWORD:?WINDOWS_CERTIFICATE_PASSWORD is required}"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Run tests
+        run: python -m pytest -q
+
+      - name: Build application
+        run: python -m PyInstaller --clean --noconfirm packaging/ibkr_lot_tracker.spec
+
+      - name: Run packaged smoke test
+        run: python scripts/packaged_smoke.py "dist/IBKR Lot Tracker/IBKR Lot Tracker.exe"
+
+      - name: Build and sign installer
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE_PFX: ${{ secrets.WINDOWS_CERTIFICATE_PFX }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" packaging/windows/installer.iss
+          $sig = Get-AuthenticodeSignature "dist/installer/IBKR-Lot-Tracker-Setup.exe"
+          if ($sig.Status -ne "Valid") { throw "Installer signature invalid: $($sig.Status)" }
+
+      - name: Hash final artifact
+        run: Get-FileHash "dist/installer/IBKR-Lot-Tracker-Setup.exe" -Algorithm SHA256 | Out-File dist/artifact.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-artifact
+          path: |
+            dist/installer/IBKR-Lot-Tracker-Setup.exe
+            dist/artifact.sha256
+
+  build-linux:
+    name: Build Linux
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Linux build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-0 libwebkit2gtk-4.1-0 python3-gi gir1.2-gtk-3.0
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Run tests
+        run: python -m pytest -q
+
+      - name: Build application
+        run: python -m PyInstaller --clean --noconfirm packaging/ibkr_lot_tracker.spec
+
+      - name: Assemble AppImage
+        run: |
+          wget -q -O /usr/local/bin/appimagetool \
+            https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x /usr/local/bin/appimagetool
+          bash packaging/linux/build-appimage.sh
+
+      - name: Run packaged smoke test
+        run: python scripts/packaged_smoke.py "dist/IBKR-Lot-Tracker-x86_64.AppImage"
+
+      - name: Hash final artifact
+        run: sha256sum "dist/IBKR-Lot-Tracker-x86_64.AppImage" | tee dist/artifact.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-artifact
+          path: |
+            dist/IBKR-Lot-Tracker-x86_64.AppImage
+            dist/artifact.sha256
+
+  release:
+    name: Assemble and publish release
+    runs-on: ubuntu-24.04
+    needs: [build-macos, build-windows, build-linux]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate tag equals application version
+        run: |
+          TAG="${{ github.ref_name }}"
+          VERSION="v${APP_VERSION}"
+          test "${TAG}" = "${VERSION}" || {
+            echo "tag ${TAG} does not match APP_VERSION ${APP_VERSION}" >&2
+            exit 1
+          }
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Install manifest tooling
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Build update manifest
+        env:
+          BASE_URL: https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}
+        run: |
+          python scripts/build_update_manifest.py \
+            --version "${APP_VERSION}" \
+            --output update-manifest.json \
+            --artifact macos arm64 dmg \
+              artifacts/macos-artifact/IBKR-Lot-Tracker.dmg \
+              "${BASE_URL}/IBKR-Lot-Tracker.dmg" \
+            --artifact windows x86_64 exe \
+              artifacts/windows-artifact/IBKR-Lot-Tracker-Setup.exe \
+              "${BASE_URL}/IBKR-Lot-Tracker-Setup.exe" \
+            --artifact linux x86_64 appimage \
+              artifacts/linux-artifact/IBKR-Lot-Tracker-x86_64.AppImage \
+              "${BASE_URL}/IBKR-Lot-Tracker-x86_64.AppImage"
+
+      - name: Sign update manifest
+        env:
+          UPDATE_MANIFEST_PRIVATE_KEY: ${{ secrets.UPDATE_MANIFEST_PRIVATE_KEY }}
+          PRODUCTION_RELEASE: "1"
+        run: |
+          : "${UPDATE_MANIFEST_PRIVATE_KEY:?UPDATE_MANIFEST_PRIVATE_KEY is required}"
+          python scripts/sign_update_manifest.py update-manifest.json
+
+      - name: Verify signature against embedded public key
+        run: |
+          python - <<'PY'
+          import base64
+          import json
+          import urllib.request
+          from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+          import backend.update_key as k
+          data = open("update-manifest.json", "rb").read()
+          sig = base64.b64decode(open("update-manifest.json.sig").read().strip())
+          pub = Ed25519PublicKey.from_public_bytes(
+              base64.b64decode(k.UPDATE_PUBLIC_KEY_B64)
+          )
+          pub.verify(sig, data)
+          print("signature verified")
+          PY
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            artifacts/macos-artifact/IBKR-Lot-Tracker.dmg
+            artifacts/windows-artifact/IBKR-Lot-Tracker-Setup.exe
+            artifacts/linux-artifact/IBKR-Lot-Tracker-x86_64.AppImage
+            update-manifest.json
+            update-manifest.json.sig
