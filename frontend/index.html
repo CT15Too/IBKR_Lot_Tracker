@@ -184,6 +184,37 @@
     letter-spacing: 0.06em; color: var(--text-muted); margin: 0;
   }
   .section-header .section-controls { display: flex; gap: 8px; align-items: center; }
+  .settings-overlay {
+    position: fixed; inset: 0; z-index: 20; display: grid; place-items: center;
+    padding: 20px; background: rgba(0, 0, 0, 0.48);
+  }
+  .settings-overlay[hidden] { display: none; }
+  .settings-dialog {
+    width: min(560px, 100%); max-height: calc(100vh - 40px); overflow: auto;
+    background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 14px; padding: 20px; box-shadow: 0 16px 50px rgba(0,0,0,.28);
+  }
+  .settings-heading {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  }
+  .settings-heading h2 { margin: 0; font-size: 19px; }
+  .settings-form { display: grid; gap: 14px; margin-top: 18px; }
+  .field { display: grid; gap: 6px; font-size: 13px; font-weight: 600; }
+  .field input[type="text"], .field input[type="password"] {
+    width: 100%; padding: 9px 10px; border-radius: 7px;
+    border: 1px solid var(--border); background: var(--page-plane);
+    color: var(--text-primary); font: inherit;
+  }
+  .check-field { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .settings-meta { display: grid; grid-template-columns: auto 1fr; gap: 5px 12px; font-size: 12px; }
+  .settings-meta dt { color: var(--text-muted); }
+  .settings-meta dd { margin: 0; }
+  .settings-actions, .update-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .feedback { min-height: 1.25em; margin: 0; color: var(--text-secondary); font-size: 13px; }
+  .feedback.error { color: var(--critical); }
+  .update-box { border-top: 1px solid var(--border); margin-top: 18px; padding-top: 16px; }
+  .update-box h3 { margin: 0 0 8px; font-size: 15px; }
+  #updateReleaseNotes { white-space: pre-wrap; color: var(--text-secondary); font-size: 13px; }
 </style>
 </head>
 <body>
@@ -197,6 +228,7 @@
       <span class="meta" id="lastFetched">—</span>
       <button id="refreshPricesBtn" title="Fetches current prices from Yahoo Finance (~15min delayed). Auto-refreshes every 60 seconds.">↻ Prices</button>
       <button id="refreshLotsBtn" class="primary" title="Pulls a fresh lot report from IBKR Flex Web Service. Auto-refreshes every 15 minutes (IBKR's own cadence).">⇩ Refresh from IBKR</button>
+      <button id="settingsBtn" aria-haspopup="dialog">Settings</button>
       <button id="themeToggle" class="icon" title="Toggle theme">◐</button>
     </div>
   </header>
@@ -227,8 +259,53 @@
   </footer>
 </div>
 
+<div id="settingsPanel" class="settings-overlay" hidden>
+  <section class="settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <div class="settings-heading">
+      <h2 id="settingsTitle">Settings</h2>
+      <button id="closeSettingsBtn" class="icon" type="button" aria-label="Close settings">×</button>
+    </div>
+    <form id="settingsForm" class="settings-form">
+      <label class="field" for="flexQueryId">
+        IBKR Flex query ID
+        <input id="flexQueryId" type="text" autocomplete="off" required>
+      </label>
+      <label class="field" for="flexToken">
+        IBKR Flex token
+        <input id="flexToken" type="password" autocomplete="new-password"
+               aria-describedby="tokenHelp">
+      </label>
+      <span id="tokenHelp" class="meta">Leave blank to keep the saved token.</span>
+      <label class="check-field" for="autoCheckUpdates">
+        <input id="autoCheckUpdates" type="checkbox">
+        Automatically check for updates
+      </label>
+      <dl class="settings-meta">
+        <dt>App version</dt><dd id="appVersion">—</dd>
+        <dt>Last update check</dt><dd id="lastUpdateCheck">Never</dd>
+      </dl>
+      <div class="settings-actions">
+        <button class="primary" type="submit">Save settings</button>
+      </div>
+      <p id="settingsFeedback" class="feedback" role="status" aria-live="polite"></p>
+    </form>
+    <div class="update-box" aria-live="polite">
+      <h3>Application updates</h3>
+      <p id="updateMessage" class="feedback"></p>
+      <p id="updateReleaseNotes" hidden></p>
+      <div class="update-actions">
+        <button id="checkUpdatesBtn" type="button">Check for updates</button>
+        <button id="downloadUpdateBtn" type="button" hidden>Download update</button>
+        <button id="cancelUpdateBtn" type="button" hidden>Cancel download</button>
+        <button id="restartUpdateBtn" class="primary" type="button" hidden>Restart and update</button>
+        <button id="deferUpdateBtn" type="button" hidden>Defer</button>
+      </div>
+    </div>
+  </section>
+</div>
+
 <script>
-const state = { data: null, loading: false };
+const state = { data: null, loading: false, settings: null, updatePoll: null };
 
 function fmtMoney(v, ccy) {
   if (v === null || v === undefined) return '—';
@@ -514,8 +591,189 @@ async function refreshFromIbkr(force) {
   }
 }
 
+function setUpdateActions(visibleIds) {
+  ['downloadUpdateBtn', 'cancelUpdateBtn', 'restartUpdateBtn', 'deferUpdateBtn']
+    .forEach(id => { document.getElementById(id).hidden = !visibleIds.includes(id); });
+}
+
+function stopUpdatePolling() {
+  if (state.updatePoll !== null) {
+    clearInterval(state.updatePoll);
+    state.updatePoll = null;
+  }
+}
+
+function startUpdatePolling() {
+  if (state.updatePoll === null) {
+    state.updatePoll = setInterval(loadUpdateStatus, 2000);
+  }
+}
+
+function renderUpdateStatus(update) {
+  const updateMessage = document.getElementById('updateMessage');
+  const updateReleaseNotes = document.getElementById('updateReleaseNotes');
+  const checkButton = document.getElementById('checkUpdatesBtn');
+  const canUpdate = state.settings?.mode === 'packaged_desktop';
+  updateMessage.classList.remove('error');
+  updateReleaseNotes.hidden = true;
+  updateReleaseNotes.textContent = '';
+  setUpdateActions([]);
+  checkButton.disabled = !canUpdate;
+
+  if (!canUpdate) {
+    stopUpdatePolling();
+    updateMessage.textContent = 'Updates are installed through Git in browser mode.';
+    checkButton.textContent = 'Updates unavailable';
+    return;
+  }
+
+  checkButton.textContent = 'Check for updates';
+  switch (update.status) {
+    case 'idle':
+      updateMessage.textContent = 'No update check is running.';
+      stopUpdatePolling();
+      break;
+    case 'checking':
+      updateMessage.textContent = 'Checking for updates…';
+      checkButton.disabled = true;
+      startUpdatePolling();
+      break;
+    case 'update_available':
+      updateMessage.textContent = `Version ${update.version || ''} is available.`;
+      updateReleaseNotes.textContent = update.release_notes || 'No release notes provided.';
+      updateReleaseNotes.hidden = false;
+      setUpdateActions(['downloadUpdateBtn', 'deferUpdateBtn']);
+      stopUpdatePolling();
+      break;
+    case 'downloading':
+      updateMessage.textContent = update.progress == null
+        ? 'Downloading and verifying update…'
+        : `Downloading and verifying update… ${Math.round(update.progress * 100)}%`;
+      setUpdateActions(['cancelUpdateBtn']);
+      startUpdatePolling();
+      break;
+    case 'ready_to_restart':
+      updateMessage.textContent = `Version ${update.version || ''} is verified and ready.`;
+      setUpdateActions(['restartUpdateBtn', 'deferUpdateBtn']);
+      stopUpdatePolling();
+      break;
+    case 'up_to_date':
+      updateMessage.textContent = 'You are up to date.';
+      stopUpdatePolling();
+      break;
+    case 'failed':
+      updateMessage.textContent = update.error || 'The update action failed. Try again.';
+      updateMessage.classList.add('error');
+      stopUpdatePolling();
+      break;
+    default:
+      updateMessage.textContent = 'Update status is unavailable.';
+      stopUpdatePolling();
+  }
+  document.getElementById('lastUpdateCheck').textContent = update.last_checked_at
+    ? new Date(update.last_checked_at).toLocaleString()
+    : 'Never';
+}
+
+async function loadUpdateStatus() {
+  try {
+    const response = await fetch('/api/updates/status');
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    renderUpdateStatus(await response.json());
+  } catch (_) {
+    renderUpdateStatus({ status: 'failed', error: 'Could not load update status.' });
+  }
+}
+
+async function runUpdateAction(route) {
+  const response = await fetch(route, { method: 'POST' });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    renderUpdateStatus({ status: 'failed', error: body.detail || `Update action failed (HTTP ${response.status}).` });
+    return;
+  }
+  if (route !== '/api/updates/restart') renderUpdateStatus(body);
+}
+
+function openSettings() {
+  document.getElementById('settingsPanel').hidden = false;
+  document.getElementById('flexQueryId').focus();
+}
+
+function closeSettings() {
+  document.getElementById('settingsPanel').hidden = true;
+  document.getElementById('settingsBtn').focus();
+}
+
+async function loadSettings() {
+  const feedback = document.getElementById('settingsFeedback');
+  try {
+    const response = await fetch('/api/settings');
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const loaded = await response.json();
+    state.settings = loaded;
+    document.getElementById('flexQueryId').value = loaded.flex_query_id || '';
+    document.getElementById('flexToken').value = '';
+    document.getElementById('flexToken').placeholder =
+      loaded.has_flex_token ? 'Saved securely' : 'Required';
+    document.getElementById('autoCheckUpdates').checked = Boolean(loaded.auto_check_updates);
+    document.getElementById('autoCheckUpdates').disabled = !loaded.desktop;
+    document.getElementById('appVersion').textContent = loaded.app_version || '—';
+    feedback.textContent = '';
+    await loadUpdateStatus();
+    if (loaded.desktop && !loaded.configured) openSettings();
+  } catch (_) {
+    feedback.textContent = 'Could not load settings.';
+    feedback.classList.add('error');
+  }
+}
+
+async function saveSettings(event) {
+  event.preventDefault();
+  const feedback = document.getElementById('settingsFeedback');
+  const tokenInput = document.getElementById('flexToken');
+  const payload = {
+    flex_query_id: document.getElementById('flexQueryId').value,
+    auto_check_updates: document.getElementById('autoCheckUpdates').checked,
+  };
+  if (tokenInput.value) payload.flex_token = tokenInput.value;
+  feedback.classList.remove('error');
+  feedback.textContent = 'Validating and saving…';
+  try {
+    const response = await fetch('/api/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body.detail || `Save failed (HTTP ${response.status}).`);
+    tokenInput.value = '';
+    state.settings = body;
+    tokenInput.placeholder = body.has_flex_token ? 'Saved securely' : 'Required';
+    feedback.textContent = 'Settings saved. The token field has been cleared.';
+    await loadUpdateStatus();
+  } catch (error) {
+    feedback.textContent = error.message;
+    feedback.classList.add('error');
+  }
+}
+
 document.getElementById('refreshLotsBtn').addEventListener('click', () => refreshFromIbkr(false));
 document.getElementById('refreshPricesBtn').addEventListener('click', () => loadLots(true));
+document.getElementById('settingsBtn').addEventListener('click', openSettings);
+document.getElementById('closeSettingsBtn').addEventListener('click', closeSettings);
+document.getElementById('settingsForm').addEventListener('submit', saveSettings);
+document.getElementById('checkUpdatesBtn').addEventListener('click', () => runUpdateAction('/api/updates/check'));
+document.getElementById('downloadUpdateBtn').addEventListener('click', () => runUpdateAction('/api/updates/download'));
+document.getElementById('cancelUpdateBtn').addEventListener('click', () => runUpdateAction('/api/updates/cancel'));
+document.getElementById('restartUpdateBtn').addEventListener('click', () => runUpdateAction('/api/updates/restart'));
+document.getElementById('deferUpdateBtn').addEventListener('click', () => runUpdateAction('/api/updates/defer'));
+document.getElementById('settingsPanel').addEventListener('click', event => {
+  if (event.target.id === 'settingsPanel') closeSettings();
+});
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && !document.getElementById('settingsPanel').hidden) closeSettings();
+});
 document.getElementById('collapseAllBtn').addEventListener('click', () =>
   document.querySelectorAll('.symbol-card').forEach(c => c.classList.add('collapsed')));
 document.getElementById('expandAllBtn').addEventListener('click', () =>
@@ -540,6 +798,7 @@ async function autoRefreshIbkr() {
 }
 setInterval(autoRefreshIbkr, IBKR_POLL_MS);
 
+loadSettings();
 loadLots(false);
 </script>
 </body>
