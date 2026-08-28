@@ -9,3 +9,8 @@ dist/
 build/
 .DS_Store
 .worktrees/
+
+# Packaging build outputs (source definitions in packaging/ are committed)
+.AppDir/
+*.AppImage
+*.dmg
