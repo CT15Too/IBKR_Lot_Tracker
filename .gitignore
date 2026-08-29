@@ -14,3 +14,9 @@ build/
 .AppDir/
 *.AppImage
 *.dmg
+
+# Desktop runtime logs (empty placeholders created at launch)
+log/
+
+# Update-manifest private key (see docs/desktop-release.md key ceremony)
+.production-update-key

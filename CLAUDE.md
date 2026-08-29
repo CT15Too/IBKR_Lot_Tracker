@@ -13,6 +13,9 @@ pip3 install -r requirements.txt
 # Start the app (backend + frontend)
 python3 run.py
 # → open http://127.0.0.1:8000
+
+# Desktop app (native pywebview window, same backend + frontend)
+python3 run_desktop.py
 ```
 
 If port 8000 is already in use, kill it first:
@@ -22,18 +25,23 @@ lsof -ti:8000 | xargs kill -9
 
 Do **not** use `python3 -m http.server` to serve the frontend — API calls will fail (POST not supported by that server). Always use `http://127.0.0.1:8000`.
 
+The three launch modes share the same backend and frontend: browser/source (`run.py`, reads `.env`), desktop/source (`run_desktop.py`), and desktop/installed (PyInstaller-bundled, reads settings from the OS data directory and the Flex token from the OS keyring). See `README.md` and `docs/desktop-release.md` for the packaging/release mechanics.
+
 ## Other commands
 
 ```bash
-# Run all tests
-pytest
+# Run all tests (install dev deps first)
+pip3 install -r requirements-dev.txt
+python3 -m pytest
 
 # Run a single test file
-pytest tests/test_flex_parser.py
+python3 -m pytest tests/test_flex_parser.py
 
 # Run a single test
-pytest tests/test_api.py::test_full_refresh_and_read_flow
+python3 -m pytest tests/test_api.py::test_full_refresh_and_read_flow
 ```
+
+Note: tests use FastAPI's `TestClient`, which requires `httpx` — pin it in `requirements-dev.txt` (already present).
 
 ## Configuration
 
@@ -87,6 +95,13 @@ POST /api/prices/override
 | `prices.py` | yfinance wrapper with 60s TTL in-memory cache; `get_fx_rate()` for currency conversion; manual override fallback |
 | `lots.py` | Groups lots by symbol, computes unrealized P&L in native + USD, identifies `sellable_quantity`, sorts cheapest-first |
 | `db.py` | SQLite with one-row upsert for flex snapshot + `price_overrides` table for manual prices |
+| `runtime.py` | `LaunchMode` (browser/desktop/smoke) + `build_runtime()` — resolves per-platform writable data dir and server bind |
+| `settings_store.py` | `SettingsStore` — atomic settings writes to the OS data dir (Flex query ID, preferences) |
+| `credentials.py` | `CredentialStore` — Flex token in the OS keyring, never written to disk/logs |
+| `desktop.py` | `run_desktop()` / `run_smoke()` — pywebview window, single-instance lock, loopback-only server, `SMOKE_OK` smoke mode |
+| `version.py` | `APP_VERSION`, `UPDATER_VERSION`, `GITHUB_REPOSITORY` |
+| `update_key.py` | `UPDATE_PUBLIC_KEY_B64` — embedded Ed25519 public key that verifies the signed update manifest |
+| `updater/` | Desktop update state machine: `http.py` (GitHub release client), `manifest.py` (signature verify + platform select), `download.py` (staged download), `install.py` (apply/relaunch per platform), `service.py` (orchestration) |
 
 ### Frontend (`frontend/index.html`)
 
@@ -96,7 +111,11 @@ Single-file vanilla JS/CSS app, no build step. Served as a static file by FastAP
 
 - `test_flex_parser.py` — unit tests for XML parsing
 - `test_lots.py` — P&L math and sort order
-- `test_api.py` — FastAPI integration tests with mocked IBKR and prices; uses `httpx.AsyncClient` with `ASGITransport`
+- `test_api.py` — FastAPI integration tests with mocked IBKR and prices (uses `fastapi.testclient.TestClient`)
+- `test_desktop.py` — desktop lifecycle, single-instance, loopback enforcement
+- `test_runtime.py` / `test_settings_store.py` — runtime paths and atomic settings persistence
+- `test_settings_update_api.py` / `test_update_*.py` — settings+update endpoints and the updater state machine
+- `test_frontend_contract.py` / `test_packaging_contract.py` / `test_release_scripts.py` / `test_workflow_contract.py` / `test_docs_contract.py` — contract tests asserting frontend update UI, the PyInstaller spec, release scripts, CI workflow, and release docs stay in sync
 - `fixtures/sample_flex.xml` — 4-lot sample (2 AAPL, 2 TSLA)
 
 ### Important implementation details
