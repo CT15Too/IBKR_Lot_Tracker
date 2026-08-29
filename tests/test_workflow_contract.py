@@ -41,6 +41,9 @@ def test_unsigned_build_covers_all_platforms_without_signing_secrets():
         "PyInstaller",
         "packaged_smoke.py",
         "upload-artifact",
+        # Artifacts carry the commit short SHA so unsigned downloads are
+        # self-identifying (there is otherwise no version tag for them).
+        "git rev-parse --short=8 HEAD",
     ]:
         assert required in workflow
     # The unsigned build must never gate on signing/notarization, which is

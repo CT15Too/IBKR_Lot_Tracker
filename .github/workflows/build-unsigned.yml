@@ -39,16 +39,17 @@ jobs:
 
       - name: Create DMG (unsigned)
         run: |
+          SHA="$(git rev-parse --short=8 HEAD)"
           hdiutil create -volname "IBKR Lot Tracker" \
             -srcfolder "dist/IBKR Lot Tracker.app" \
-            -ov -format UDZO "dist/IBKR-Lot-Tracker.dmg"
-          shasum -a 256 "dist/IBKR-Lot-Tracker.dmg" | tee dist/artifact.sha256
+            -ov -format UDZO "dist/IBKR-Lot-Tracker-${SHA}.dmg"
+          shasum -a 256 "dist/IBKR-Lot-Tracker-${SHA}.dmg" | tee dist/artifact.sha256
 
       - uses: actions/upload-artifact@v4
         with:
           name: macos-unsigned
           path: |
-            dist/IBKR-Lot-Tracker.dmg
+            dist/IBKR-Lot-Tracker-*.dmg
             dist/artifact.sha256
 
   build-windows:
@@ -78,14 +79,18 @@ jobs:
         run: |
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" packaging/windows/installer.iss
 
-      - name: Hash final artifact
-        run: Get-FileHash "dist/installer/IBKR-Lot-Tracker-Setup.exe" -Algorithm SHA256 | Out-File dist/artifact.sha256
+      - name: Tag and hash final artifact
+        shell: pwsh
+        run: |
+          $sha = (git rev-parse --short=8 HEAD)
+          Rename-Item "dist/installer/IBKR-Lot-Tracker-Setup.exe" "IBKR-Lot-Tracker-Setup-$sha.exe"
+          Get-FileHash "dist/installer/IBKR-Lot-Tracker-Setup-$sha.exe" -Algorithm SHA256 | Out-File dist/artifact.sha256
 
       - uses: actions/upload-artifact@v4
         with:
           name: windows-unsigned
           path: |
-            dist/installer/IBKR-Lot-Tracker-Setup.exe
+            dist/installer/IBKR-Lot-Tracker-Setup-*.exe
             dist/artifact.sha256
 
   build-linux:
@@ -122,12 +127,15 @@ jobs:
       - name: Run packaged smoke test
         run: python scripts/packaged_smoke.py "dist/IBKR-Lot-Tracker-x86_64.AppImage"
 
-      - name: Hash final artifact
-        run: sha256sum "dist/IBKR-Lot-Tracker-x86_64.AppImage" | tee dist/artifact.sha256
+      - name: Tag and hash final artifact
+        run: |
+          SHA="$(git rev-parse --short=8 HEAD)"
+          mv "dist/IBKR-Lot-Tracker-x86_64.AppImage" "dist/IBKR-Lot-Tracker-x86_64-${SHA}.AppImage"
+          sha256sum "dist/IBKR-Lot-Tracker-x86_64-${SHA}.AppImage" | tee dist/artifact.sha256
 
       - uses: actions/upload-artifact@v4
         with:
           name: linux-unsigned
           path: |
-            dist/IBKR-Lot-Tracker-x86_64.AppImage
+            dist/IBKR-Lot-Tracker-x86_64-*.AppImage
             dist/artifact.sha256
