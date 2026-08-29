@@ -59,6 +59,11 @@ def test_windows_installer_is_per_user_and_no_elevation():
     assert "{localappdata}" in iss
     assert "SetupIconFile" in iss
     assert "icon.ico" in iss
+    # Source files and installer output must be repo-root relative (via ..\..\),
+    # because Inno Setup resolves bare "dist\..." against the script's own
+    # packaging/windows/ directory — not the PyInstaller output at the repo root.
+    assert r"..\..\dist\{#MyAppName}\*" in iss
+    assert r"OutputDir=..\..\dist\installer" in iss
 
 
 def test_appimage_script_invokes_appimagetool():

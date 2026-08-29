@@ -18,7 +18,7 @@ DefaultGroupName={#MyAppName}
 PrivilegesRequired=lowest
 ArchitecturesInstallIn64BitMode=x64compatible
 SetupIconFile=..\..\assets\icon.ico
-OutputDir=dist\installer
+OutputDir=..\..\dist\installer
 OutputBaseFilename=IBKR-Lot-Tracker-Setup
 Compression=lzma2
 SolidCompression=yes
@@ -29,7 +29,7 @@ UninstallDisplayIcon={app}\{#MyAppExeName}
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Files]
-Source: "dist\{#MyAppName}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\..\dist\{#MyAppName}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
