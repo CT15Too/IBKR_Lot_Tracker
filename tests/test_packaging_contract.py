@@ -19,6 +19,10 @@ def test_pyinstaller_spec_targets_desktop_entry_and_bundles_assets():
     # (SPECPATH), not as bare paths relative to the spec's packaging/ dir.
     assert "SPECPATH" in spec
     assert '["run_desktop.py"]' not in spec
+    # The app icon is wired per-platform: icns on macOS, ico elsewhere.
+    assert "APP_ICON" in spec
+    assert "icon.icns" in spec
+    assert "icon.ico" in spec
 
 
 def test_windows_installer_is_per_user_and_no_elevation():
@@ -26,11 +30,18 @@ def test_windows_installer_is_per_user_and_no_elevation():
     assert "PrivilegesRequired=lowest" in iss
     assert "ArchitecturesInstallIn64BitMode=x64compatible" in iss
     assert "{localappdata}" in iss
+    assert "SetupIconFile" in iss
+    assert "icon.ico" in iss
 
 
 def test_appimage_script_invokes_appimagetool():
     script = _read("packaging/linux/build-appimage.sh")
     assert "appimagetool" in script
+    # Ships the real icon and references it from the .desktop entry (no more
+    # placeholder PNG).
+    assert "assets/icon.png" in script
+    assert "Icon=$APP_NAME" in script
+    assert "Placeholder" not in script
 
 
 def test_packaged_smoke_script_requires_smoke_ok():

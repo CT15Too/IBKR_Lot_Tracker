@@ -19,6 +19,13 @@ from PyInstaller.utils.hooks import collect_all, collect_submodules
 # build works regardless of the directory PyInstaller is invoked from.
 ROOT = os.path.abspath(os.path.join(SPECPATH, os.pardir))
 
+# Application icon, in the format native to the target platform. macOS uses a
+# .icns on the app bundle; Windows embeds a .ico in the executable; Linux is
+# handled by the AppImage .desktop entry + PNG (see packaging/linux/).
+APP_ICON = os.path.join(
+    ROOT, "assets", "icon.icns" if sys.platform == "darwin" else "icon.ico"
+)
+
 datas = [(os.path.join(ROOT, "frontend"), "frontend")]
 binaries = []
 hiddenimports = [
@@ -71,7 +78,7 @@ if sys.platform == "darwin":
     app = BUNDLE(
         exe,
         name="IBKR Lot Tracker.app",
-        icon=None,
+        icon=APP_ICON,
         bundle_identifier="com.ibkrlottracker.app",
         info_plist={
             "CFBundleDisplayName": "IBKR Lot Tracker",
@@ -93,5 +100,5 @@ else:
         # Linux keeps a console so packaged smoke output is captured; Windows
         # builds a GUI subsystem binary with no console window.
         console=(sys.platform != "win32"),
-        icon=None,
+        icon=APP_ICON,
     )

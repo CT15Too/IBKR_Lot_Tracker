@@ -1,5 +1,9 @@
 # IBKR Lot Tracker
 
+<p align="center">
+  <img src="assets/icon.png" alt="IBKR Lot Tracker" width="128" />
+</p>
+
 > The per-lot breakdown that IBKR's own interface doesn't give you.
 
 **IBKR does not show individual lot detail in its UI.** Every position appears as a single blended average cost — so if you bought AAPL at $150, $170, and $190, IBKR just shows you one average. You have no way to tell which lots are in profit and which are underwater without doing the math yourself.

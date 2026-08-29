@@ -17,6 +17,7 @@ DefaultDirName={localappdata}\Programs\IBKR Lot Tracker
 DefaultGroupName={#MyAppName}
 PrivilegesRequired=lowest
 ArchitecturesInstallIn64BitMode=x64compatible
+SetupIconFile=..\..\assets\icon.ico
 OutputDir=dist\installer
 OutputBaseFilename=IBKR-Lot-Tracker-Setup
 Compression=lzma2

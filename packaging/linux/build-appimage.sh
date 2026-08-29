@@ -39,14 +39,13 @@ cat > "$APPDIR/$APP_NAME.desktop" <<EOF
 [Desktop Entry]
 Name=$APP_NAME
 Exec=AppRun
+Icon=$APP_NAME
 Type=Application
 Categories=Finance;Utility;
 Terminal=false
 EOF
 
-cat > "$APPDIR/$APP_NAME.png" <<'EOF'
-# Placeholder 1x1 PNG; replace with the real application icon before release.
-EOF
+cp "$ROOT/assets/icon.png" "$APPDIR/$APP_NAME.png"
 
 ARCH="$(uname -m)"
 OUT="$DIST/IBKR-Lot-Tracker-$ARCH.AppImage"
