@@ -25,6 +25,21 @@ def test_pyinstaller_spec_targets_desktop_entry_and_bundles_assets():
     assert "icon.ico" in spec
 
 
+def test_macos_bundle_collects_python_library_and_assets():
+    spec = _read("packaging/ibkr_lot_tracker.spec")
+    # The macOS .app must be assembled via COLLECT(exe, a.binaries, a.datas, ...)
+    # before BUNDLE wraps it. Bundling `exe` alone — built with
+    # exclude_binaries=True — drops a.binaries (Python shared library +
+    # extension modules) and a.datas (frontend/webview resources), leaving the
+    # bundle without Contents/Frameworks/Python. The bootloader then fails at
+    # launch with "Failed to load Python shared library".
+    assert "COLLECT(" in spec
+    assert "a.binaries" in spec
+    assert "a.datas" in spec
+    assert "BUNDLE(" in spec
+    assert "exclude_binaries=True" in spec
+
+
 def test_windows_installer_is_per_user_and_no_elevation():
     iss = _read("packaging/windows/installer.iss")
     assert "PrivilegesRequired=lowest" in iss

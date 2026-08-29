@@ -75,8 +75,16 @@ if sys.platform == "darwin":
         upx=False,
         console=True,
     )
-    app = BUNDLE(
+    coll = COLLECT(
         exe,
+        a.binaries,
+        a.datas,
+        strip=False,
+        upx=False,
+        name=APP_NAME,
+    )
+    app = BUNDLE(
+        coll,
         name="IBKR Lot Tracker.app",
         icon=APP_ICON,
         bundle_identifier="com.ibkrlottracker.app",
