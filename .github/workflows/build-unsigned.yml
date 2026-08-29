@@ -24,17 +24,23 @@ jobs:
       # PyInstaller's macOS .app bundle requires a framework Python build;
       # actions/setup-python ships a non-framework build whose bundle lacks
       # Contents/Frameworks/Python and fails to launch. Install the python.org
-      # framework build instead.
+      # framework build instead, and fail loudly if it did not fully install.
       - name: Install framework Python (python.org)
         shell: bash
         run: |
-          curl -fsSL -o python.pkg \
-            "https://www.python.org/ftp/python/3.11.9/python-3.11.9-macos11.pkg"
-          sudo installer -pkg python.pkg -target /
+          set -euxo pipefail
+          VER="3.11.9"
+          curl -fsSL -o /tmp/python.pkg \
+            "https://www.python.org/ftp/python/${VER}/python-${VER}-macos11.pkg"
+          sudo installer -pkg /tmp/python.pkg -target /
+          PYBIN="/Library/Frameworks/Python.framework/Versions/3.11/bin/python3"
+          "$PYBIN" --version
+          "$PYBIN" -c \
+            'import sysconfig; assert sysconfig.get_config_var("PYTHONFRAMEWORK"), "not a framework build"'
+          test -f /Library/Frameworks/Python.framework/Versions/3.11/Python
           mkdir -p "$HOME/.framework-python/bin"
-          PY="/Library/Frameworks/Python.framework/Versions/3.11/bin"
-          ln -sf "$PY/python3" "$HOME/.framework-python/bin/python"
-          ln -sf "$PY/python3" "$HOME/.framework-python/bin/python3"
+          ln -sf "$PYBIN" "$HOME/.framework-python/bin/python"
+          ln -sf "$PYBIN" "$HOME/.framework-python/bin/python3"
           echo "$HOME/.framework-python/bin" >> "$GITHUB_PATH"
 
       - name: Install dependencies
@@ -45,6 +51,11 @@ jobs:
 
       - name: Build application bundle
         run: python -m PyInstaller --clean --noconfirm packaging/ibkr_lot_tracker.spec
+
+      - name: Verify bundled Python framework
+        run: |
+          ls -la "dist/IBKR Lot Tracker.app/Contents/Frameworks/"
+          test -e "dist/IBKR Lot Tracker.app/Contents/Frameworks/Python"
 
       - name: Run packaged smoke test
         run: python scripts/packaged_smoke.py "dist/IBKR Lot Tracker.app/Contents/MacOS/IBKR Lot Tracker"
