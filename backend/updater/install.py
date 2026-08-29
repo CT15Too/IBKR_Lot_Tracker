@@ -170,6 +170,10 @@ def _validate_files(request: InstallRequest):
 
 
 def _fsync_file(path: Path) -> None:
+    if os.name == "nt":
+        # fsync on a read-only handle is unsupported on Windows; this helper
+        # only runs on the Linux AppImage install path anyway.
+        return
     with path.open("rb") as handle:
         os.fsync(handle.fileno())
 

@@ -126,11 +126,11 @@ def test_detached_signature_verifies(tmp_path, signing_key):
     )
 
 
-def test_local_key_generation_writes_private_and_prints_public(tmp_path):
+def test_local_key_generation_writes_private_and_prints_public(tmp_path, assert_mode):
     private_path = tmp_path / "local-key"
     result = _run(SIGN_SCRIPT, ["--generate-local-key", str(private_path)])
     assert result.returncode == 0, result.stderr
     public_b64 = result.stdout.strip()
     Ed25519PublicKey.from_public_bytes(base64.b64decode(public_b64))
     assert private_path.exists()
-    assert (private_path.stat().st_mode & 0o777) == 0o600
+    assert_mode(private_path, 0o600)

@@ -42,7 +42,7 @@ def artifact_for(payload, name="IBKR-Lot-Tracker.dmg"):
     )
 
 
-def test_verified_download_atomically_loses_partial_suffix(tmp_path):
+def test_verified_download_atomically_loses_partial_suffix(tmp_path, assert_mode):
     payload = b"signed installer"
     artifact = artifact_for(payload)
     client = FakeClient([payload[:4], payload[4:]])
@@ -51,7 +51,7 @@ def test_verified_download_atomically_loses_partial_suffix(tmp_path):
     assert result.read_bytes() == payload
     assert client.requested_url == artifact.url
     assert not list(tmp_path.glob("*.partial"))
-    assert tmp_path.stat().st_mode & 0o777 == 0o700
+    assert_mode(tmp_path, 0o700)
 
 
 def test_interruption_keeps_current_install_and_removes_only_own_partial(tmp_path):
@@ -164,8 +164,8 @@ def test_rejects_unsafe_artifact_names_without_creating_staging(tmp_path, name):
     assert not list(tmp_path.iterdir())
 
 
-def test_published_file_has_user_only_permissions(tmp_path):
+def test_published_file_has_user_only_permissions(tmp_path, assert_mode):
     result = download_artifact(
         FakeClient([b"abc"]), artifact_for(b"abc"), tmp_path
     )
-    assert result.stat().st_mode & 0o777 == 0o600
+    assert_mode(result, 0o600)

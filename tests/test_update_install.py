@@ -65,7 +65,7 @@ def request(platform, staged, current):
     )
 
 
-def test_helper_request_is_private_and_launch_has_no_shell(tmp_path):
+def test_helper_request_is_private_and_launch_has_no_shell(tmp_path, assert_mode):
     staged = executable(tmp_path / "updates/new.AppImage", b"new")
     current = executable(tmp_path / "IBKR.AppImage", b"old")
     calls = []
@@ -82,7 +82,7 @@ def test_helper_request_is_private_and_launch_has_no_shell(tmp_path):
         platform_name="linux",
     )
 
-    assert path.stat().st_mode & 0o777 == 0o600
+    assert_mode(path, 0o600)
     assert set(json.loads(path.read_text())) == {
         "platform",
         "staged_path",
