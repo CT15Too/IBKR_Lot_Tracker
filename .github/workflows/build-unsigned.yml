@@ -19,9 +19,9 @@ jobs:
     name: Build macOS (unsigned)
     runs-on: macos-14
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
@@ -45,7 +45,7 @@ jobs:
             -ov -format UDZO "dist/IBKR-Lot-Tracker-${SHA}.dmg"
           shasum -a 256 "dist/IBKR-Lot-Tracker-${SHA}.dmg" | tee dist/artifact.sha256
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: macos-unsigned
           path: |
@@ -56,9 +56,9 @@ jobs:
     name: Build Windows (unsigned)
     runs-on: windows-2022
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
@@ -86,7 +86,7 @@ jobs:
           Rename-Item "dist/installer/IBKR-Lot-Tracker-Setup.exe" "IBKR-Lot-Tracker-Setup-$sha.exe"
           Get-FileHash "dist/installer/IBKR-Lot-Tracker-Setup-$sha.exe" -Algorithm SHA256 | Out-File dist/artifact.sha256
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: windows-unsigned
           path: |
@@ -97,9 +97,9 @@ jobs:
     name: Build Linux (unsigned)
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
@@ -133,7 +133,7 @@ jobs:
           mv "dist/IBKR-Lot-Tracker-x86_64.AppImage" "dist/IBKR-Lot-Tracker-x86_64-${SHA}.AppImage"
           sha256sum "dist/IBKR-Lot-Tracker-x86_64-${SHA}.AppImage" | tee dist/artifact.sha256
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: linux-unsigned
           path: |

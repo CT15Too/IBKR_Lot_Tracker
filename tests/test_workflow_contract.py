@@ -31,6 +31,24 @@ def test_release_tests_builds_smokes_signs_hashes_then_publishes():
     assert "if: ${{ secrets.UPDATE_MANIFEST_PRIVATE_KEY != '' }}" not in workflow
 
 
+def test_workflows_pin_node24_actions():
+    # Node 20 was removed from GitHub-hosted runners (Sept 2025); every
+    # workflow must use the Node 24 action majors so builds keep running.
+    for name in ["ci.yml", "build-unsigned.yml", "release.yml"]:
+        workflow = _read(f".github/workflows/{name}")
+        assert "actions/checkout@v5" in workflow
+        assert "actions/setup-python@v6" in workflow
+    # Only the build/release pipelines upload artifacts; CI is test-only.
+    for name in ["build-unsigned.yml", "release.yml"]:
+        workflow = _read(f".github/workflows/{name}")
+        assert "actions/upload-artifact@v5" in workflow
+    # And no stale Node 20-era majors remain.
+    for name in ["ci.yml", "build-unsigned.yml", "release.yml"]:
+        workflow = _read(f".github/workflows/{name}")
+        for stale in ["checkout@v4", "setup-python@v5", "upload-artifact@v4"]:
+            assert stale not in workflow
+
+
 def test_unsigned_build_covers_all_platforms_without_signing_secrets():
     workflow = _read(".github/workflows/build-unsigned.yml")
     for runner in ["macos-14", "windows-2022", "ubuntu-24.04"]:
