@@ -1,0 +1,133 @@
+name: Build unsigned packages
+
+# Manual (workflow_dispatch) builds of unsigned desktop packages for all three
+# platforms. These are for locally testing an "installed desktop" build pulled
+# from GitHub — no signing/notarization secrets required, so macOS Gatekeeper
+# and Windows SmartScreen will warn (see each platform's run note below).
+#
+# This is intentionally separate from release.yml, which fails closed on
+# signing/notarization and publishes a signed, update-manifested release.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-macos:
+    name: Build macOS (unsigned)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Run tests
+        run: python -m pytest -q
+
+      - name: Build application bundle
+        run: python -m PyInstaller --clean --noconfirm packaging/ibkr_lot_tracker.spec
+
+      - name: Run packaged smoke test
+        run: python scripts/packaged_smoke.py "dist/IBKR Lot Tracker.app/Contents/MacOS/IBKR Lot Tracker"
+
+      - name: Create DMG (unsigned)
+        run: |
+          hdiutil create -volname "IBKR Lot Tracker" \
+            -srcfolder "dist/IBKR Lot Tracker.app" \
+            -ov -format UDZO "dist/IBKR-Lot-Tracker.dmg"
+          shasum -a 256 "dist/IBKR-Lot-Tracker.dmg" | tee dist/artifact.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-unsigned
+          path: |
+            dist/IBKR-Lot-Tracker.dmg
+            dist/artifact.sha256
+
+  build-windows:
+    name: Build Windows (unsigned)
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Run tests
+        run: python -m pytest -q
+
+      - name: Build application
+        run: python -m PyInstaller --clean --noconfirm packaging/ibkr_lot_tracker.spec
+
+      - name: Run packaged smoke test
+        run: python scripts/packaged_smoke.py "dist/IBKR Lot Tracker/IBKR Lot Tracker.exe"
+
+      - name: Build installer (unsigned)
+        shell: pwsh
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" packaging/windows/installer.iss
+
+      - name: Hash final artifact
+        run: Get-FileHash "dist/installer/IBKR-Lot-Tracker-Setup.exe" -Algorithm SHA256 | Out-File dist/artifact.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-unsigned
+          path: |
+            dist/installer/IBKR-Lot-Tracker-Setup.exe
+            dist/artifact.sha256
+
+  build-linux:
+    name: Build Linux (unsigned)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Linux build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-0 libwebkit2gtk-4.1-0 python3-gi gir1.2-gtk-3.0
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Run tests
+        run: python -m pytest -q
+
+      - name: Build application
+        run: python -m PyInstaller --clean --noconfirm packaging/ibkr_lot_tracker.spec
+
+      - name: Assemble AppImage
+        run: |
+          wget -q -O /usr/local/bin/appimagetool \
+            https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x /usr/local/bin/appimagetool
+          bash packaging/linux/build-appimage.sh
+
+      - name: Run packaged smoke test
+        run: python scripts/packaged_smoke.py "dist/IBKR-Lot-Tracker-x86_64.AppImage"
+
+      - name: Hash final artifact
+        run: sha256sum "dist/IBKR-Lot-Tracker-x86_64.AppImage" | tee dist/artifact.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-unsigned
+          path: |
+            dist/IBKR-Lot-Tracker-x86_64.AppImage
+            dist/artifact.sha256
