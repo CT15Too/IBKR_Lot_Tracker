@@ -28,9 +28,21 @@ jobs:
           : "${APPLE_APP_PASSWORD:?APPLE_APP_PASSWORD is required}"
           : "${APPLE_TEAM_ID:?APPLE_TEAM_ID is required}"
 
-      - uses: actions/setup-python@v6
-        with:
-          python-version: "3.11"
+      # PyInstaller's macOS .app bundle requires a framework Python build;
+      # actions/setup-python ships a non-framework build whose bundle lacks
+      # Contents/Frameworks/Python and fails to launch. Install the python.org
+      # framework build instead.
+      - name: Install framework Python (python.org)
+        shell: bash
+        run: |
+          curl -fsSL -o python.pkg \
+            "https://www.python.org/ftp/python/3.11.9/python-3.11.9-macos11.pkg"
+          sudo installer -pkg python.pkg -target /
+          mkdir -p "$HOME/.framework-python/bin"
+          PY="/Library/Frameworks/Python.framework/Versions/3.11/bin"
+          ln -sf "$PY/python3" "$HOME/.framework-python/bin/python"
+          ln -sf "$PY/python3" "$HOME/.framework-python/bin/python3"
+          echo "$HOME/.framework-python/bin" >> "$GITHUB_PATH"
 
       - name: Install dependencies
         run: python -m pip install -r requirements-dev.txt

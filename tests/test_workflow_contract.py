@@ -49,6 +49,18 @@ def test_workflows_pin_node24_actions():
             assert stale not in workflow
 
 
+def test_macos_builds_use_framework_python_for_pyinstaller():
+    # PyInstaller's macOS .app bundle needs a framework Python; the stock
+    # actions/setup-python build is non-framework, so its bundle is missing
+    # Contents/Frameworks/Python and the packaged app fails to launch. The
+    # macOS build jobs must install the python.org framework build instead.
+    for name in ["build-unsigned.yml", "release.yml"]:
+        workflow = _read(f".github/workflows/{name}")
+        assert "python.org" in workflow
+        assert "Python.framework" in workflow
+        assert "macos11.pkg" in workflow
+
+
 def test_unsigned_build_covers_all_platforms_without_signing_secrets():
     workflow = _read(".github/workflows/build-unsigned.yml")
     for runner in ["macos-14", "windows-2022", "ubuntu-24.04"]:
