@@ -77,6 +77,17 @@ The project runs three ways, all sharing the same backend and frontend:
 
 ## Desktop application
 
+> **macOS note:** the desktop app doesn't work reliably — the packaged `.app`
+> bundle starts its local server but the window never appears. Use the web app
+> instead:
+>
+> ```bash
+> python3 run.py
+> ```
+>
+> then open **http://127.0.0.1:8000** in your browser. Same backend and
+> frontend, just served over localhost.
+
 Installed desktop builds keep writable data outside the application directory
 so reinstalling or upgrading never erases your data:
 

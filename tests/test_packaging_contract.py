@@ -40,6 +40,20 @@ def test_macos_bundle_collects_python_library_and_assets():
     assert "exclude_binaries=True" in spec
 
 
+def test_macos_bundle_is_foreground_gui_app_not_background_only():
+    spec = _read("packaging/ibkr_lot_tracker.spec")
+    # The macOS desktop app must be a foreground GUI app. If the macOS EXE is
+    # built with console=True, PyInstaller emits LSBackgroundOnly=true into the
+    # .app Info.plist (osx.py BUNDLE: "Setting EXE console=True implies
+    # LSBackgroundOnly=True"), which hides the Dock icon and every window. The
+    # backend starts and the WKWebView still loads the page, so no error is
+    # raised — the app just appears to "do nothing". console=True must never
+    # appear in the spec: Windows/Linux use the conditional console=False for
+    # win32, and macOS is console=False too.
+    assert "console=True" not in spec
+    assert "console=False" in spec
+
+
 def test_windows_linux_build_onedir_for_packaging_scripts():
     spec = _read("packaging/ibkr_lot_tracker.spec")
     # installer.iss (Source: dist\IBKR Lot Tracker\*) and build-appimage.sh

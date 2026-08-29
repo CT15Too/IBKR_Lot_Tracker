@@ -73,7 +73,11 @@ if sys.platform == "darwin":
         bootloader_ignore_signals=False,
         strip=False,
         upx=False,
-        console=True,
+        # Must be a foreground GUI app. A console (non-windowed) exe makes
+        # PyInstaller emit LSBackgroundOnly=true in the .app Info.plist, which
+        # suppresses the Dock icon and every window — the server still starts
+        # and the page loads, but nothing is ever shown to the user.
+        console=False,
     )
     coll = COLLECT(
         exe,
