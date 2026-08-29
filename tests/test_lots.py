@@ -8,7 +8,7 @@ FIXTURE = Path(__file__).parent / "fixtures" / "sample_flex.xml"
 
 
 def test_pnl_computation_and_sort_order():
-    lots = parse_open_position_lots(FIXTURE.read_text())
+    lots = parse_open_position_lots(FIXTURE.read_text(encoding="utf-8"))
     quotes = {
         "AAPL": PriceQuote(symbol="AAPL", price=228.40, stale=False),
         "TSLA": PriceQuote(symbol="TSLA", price=245.10, stale=False),
@@ -35,7 +35,7 @@ def test_pnl_computation_and_sort_order():
 
 
 def test_missing_price_yields_none_pnl():
-    lots = parse_open_position_lots(FIXTURE.read_text())
+    lots = parse_open_position_lots(FIXTURE.read_text(encoding="utf-8"))
     quotes = {
         "AAPL": PriceQuote(symbol="AAPL", price=None, stale=True),
         "TSLA": PriceQuote(symbol="TSLA", price=None, stale=True),

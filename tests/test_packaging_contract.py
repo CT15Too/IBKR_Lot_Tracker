@@ -4,7 +4,7 @@ ROOT = Path(__file__).parents[1]
 
 
 def _read(rel: str) -> str:
-    return (ROOT / rel).read_text()
+    return (ROOT / rel).read_text(encoding="utf-8")
 
 
 def test_pyinstaller_spec_targets_desktop_entry_and_bundles_assets():

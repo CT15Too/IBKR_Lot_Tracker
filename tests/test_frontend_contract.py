@@ -1,7 +1,7 @@
 from pathlib import Path
 
 
-HTML = (Path(__file__).parents[1] / "frontend/index.html").read_text()
+HTML = (Path(__file__).parents[1] / "frontend/index.html").read_text(encoding="utf-8")
 
 
 def test_settings_panel_contains_required_accessible_controls():

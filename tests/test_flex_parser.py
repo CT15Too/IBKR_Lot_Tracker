@@ -8,20 +8,20 @@ FIXTURE = Path(__file__).parent / "fixtures" / "sample_flex.xml"
 
 
 def test_parses_all_lots():
-    xml = FIXTURE.read_text()
+    xml = FIXTURE.read_text(encoding="utf-8")
     lots = parse_open_position_lots(xml)
     assert len(lots) == 4
 
 
 def test_groups_correctly_by_symbol():
-    xml = FIXTURE.read_text()
+    xml = FIXTURE.read_text(encoding="utf-8")
     lots = parse_open_position_lots(xml)
     symbols = {lot.symbol for lot in lots}
     assert symbols == {"AAPL", "TSLA"}
 
 
 def test_lot_fields_parsed():
-    xml = FIXTURE.read_text()
+    xml = FIXTURE.read_text(encoding="utf-8")
     lots = parse_open_position_lots(xml)
     aapl_lots = sorted([l for l in lots if l.symbol == "AAPL"], key=lambda l: l.cost_price)
     assert aapl_lots[0].quantity == 10

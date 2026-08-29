@@ -13,7 +13,7 @@ from backend.prices import PriceQuote
 from backend.runtime import LaunchMode, build_runtime
 import run as browser_entry
 
-FIXTURE_XML = (Path(__file__).parent / "fixtures" / "sample_flex.xml").read_text()
+FIXTURE_XML = (Path(__file__).parent / "fixtures" / "sample_flex.xml").read_text(encoding="utf-8")
 
 
 def make_client(tmp_path, monkeypatch):
