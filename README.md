@@ -1,7 +1,7 @@
 # IBKR Lot Tracker
 
 <p align="center">
-  <img src="assets/icon.png" alt="IBKR Lot Tracker" width="128" />
+  <img src="assets/icon.png" alt="IBKR Lot Tracker" width="128" style="border-radius: 20px" />
 </p>
 
 > The per-lot breakdown that IBKR's own interface doesn't give you.
