@@ -40,6 +40,18 @@ def test_macos_bundle_collects_python_library_and_assets():
     assert "exclude_binaries=True" in spec
 
 
+def test_windows_linux_build_onedir_for_packaging_scripts():
+    spec = _read("packaging/ibkr_lot_tracker.spec")
+    # installer.iss (Source: dist\IBKR Lot Tracker\*) and build-appimage.sh
+    # (test -d dist/IBKR Lot Tracker) both consume the one-folder layout, as
+    # does the packaged smoke test. Every branch must therefore build with
+    # exclude_binaries=True and assemble via COLLECT — a onefile EXE (passing
+    # a.binaries/a.datas straight to EXE) yields a single file that none of the
+    # scripts can locate.
+    assert spec.count("exclude_binaries=True") >= 2
+    assert spec.count("COLLECT(") >= 2
+
+
 def test_windows_installer_is_per_user_and_no_elevation():
     iss = _read("packaging/windows/installer.iss")
     assert "PrivilegesRequired=lowest" in iss

@@ -97,9 +97,8 @@ else:
     exe = EXE(
         pyz,
         a.scripts,
-        a.binaries,
-        a.datas,
         [],
+        exclude_binaries=True,
         name=APP_NAME,
         debug=False,
         bootloader_ignore_signals=False,
@@ -109,4 +108,12 @@ else:
         # builds a GUI subsystem binary with no console window.
         console=(sys.platform != "win32"),
         icon=APP_ICON,
+    )
+    coll = COLLECT(
+        exe,
+        a.binaries,
+        a.datas,
+        strip=False,
+        upx=False,
+        name=APP_NAME,
     )
