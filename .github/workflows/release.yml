@@ -60,6 +60,8 @@ jobs:
 
       - name: Build application bundle
         run: |
+          "$FW_PY" -c 'import sys, sysconfig; print("PYEXE:", sys.executable); print("PREFIX:", sys.base_prefix); print("INSTSONAME:", sysconfig.get_config_var("INSTSONAME")); print("FRAMEWORK:", sysconfig.get_config_var("PYTHONFRAMEWORK"))'
+          "$FW_PY" -c 'from PyInstaller.depend import bindepend; print("PYLIB:", bindepend.get_python_library_path())'
           "$FW_PY" -m PyInstaller --clean --noconfirm packaging/ibkr_lot_tracker.spec
 
       - name: Verify bundled Python framework
